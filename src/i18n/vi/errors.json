@@ -1,0 +1,16 @@
+{
+  "invalidCredentials": "Email hoặc mật khẩu không đúng",
+  "invalidRefreshToken": "Refresh token không hợp lệ",
+  "userConflict": "Email hoặc tên đăng nhập đã được sử dụng",
+  "usernameConflict": "Tên đăng nhập đã được sử dụng",
+  "userNotFound": "Người dùng không tồn tại",
+  "validation": "Dữ liệu không hợp lệ",
+  "validationField": "Trường không hợp lệ hoặc không được phép: {field}",
+  "badRequest": "Yêu cầu không hợp lệ",
+  "unauthorized": "Yêu cầu đăng nhập",
+  "forbidden": "Không có quyền truy cập",
+  "notFound": "Không tìm thấy dữ liệu",
+  "conflict": "Dữ liệu bị trùng hoặc xung đột",
+  "rateLimit": "Quá nhiều yêu cầu",
+  "internal": "Lỗi hệ thống"
+}

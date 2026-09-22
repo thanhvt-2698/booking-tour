@@ -1,0 +1,16 @@
+{
+  "invalidCredentials": "Invalid email or password",
+  "invalidRefreshToken": "Invalid refresh token",
+  "userConflict": "Email or username is already in use",
+  "usernameConflict": "Username is already in use",
+  "userNotFound": "User does not exist",
+  "validation": "Validation failed",
+  "validationField": "Invalid or unexpected field: {field}",
+  "badRequest": "Invalid request",
+  "unauthorized": "Authentication required",
+  "forbidden": "Access denied",
+  "notFound": "Resource not found",
+  "conflict": "Resource conflict",
+  "rateLimit": "Too many requests",
+  "internal": "Internal server error"
+}

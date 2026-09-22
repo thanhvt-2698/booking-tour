@@ -1,67 +1,85 @@
 # Booking Tour API
 
-Backend-only API cho hệ thống đặt tour du lịch, được xây dựng để thực hành và mở rộng các kiến thức trong project `nestjs-tutorial`.
+F00 combines B3 (foundation/auth/i18n) and B4 (entities/relations/migrations).
+Business APIs are delivered later as small B5 PRs.
 
-## Mục tiêu học tập
+## Requirements and startup
 
-- Tái sử dụng modular architecture, DTO validation, JWT, TypeORM, migration, Swagger, unit test và e2e test.
-- Bổ sung RBAC, upload file, Redis/Bull queue, gửi email bất đồng bộ, scheduler, seeder CLI và kỹ thuật debug.
-- Ưu tiên correctness trước, sau đó đo lường và tối ưu các query có nguy cơ trở thành bottleneck.
+- Node.js >=22.22.3, PostgreSQL 16.
+- Copy `.env.example` to `.env`, set a strong JWT_SECRET (at least 32 characters).
+- `npm ci`
+- `docker compose up -d postgres`
+- `npm run db:migration:run`
+- `npm run start:dev`
 
-## Công nghệ dự kiến
+HTTP defaults to port 3001. Swagger: `/docs`, OpenAPI: `/docs-json`.
+Redis, SMTP, scheduler and Google OAuth are **not activated or required** in F00.
+The compose Redis service is reserved for later work.
 
-- NestJS 11, TypeScript strict mode.
-- PostgreSQL 16 và TypeORM.
-- Redis 7 và `@nestjs/bull` cho email/background jobs.
-- `@nestjs/schedule` cho các tác vụ định kỳ.
-- Jest, Supertest, Swagger/OpenAPI.
-- Docker Compose cho PostgreSQL và Redis.
+## Delivered endpoints
 
-## Khởi động
+| Method | Route | Description |
+| --- | --- | --- |
+| GET | /api | Health |
+| POST | /api/auth/register | Create user and token pair |
+| POST | /api/auth/login | Email/password login |
+| POST | /api/auth/refresh | Rotate refresh token (row-locked transaction) |
+| POST | /api/auth/logout | Revoke supplied refresh token |
+| GET | /api/users/me | Current user, Bearer token required |
+| PATCH | /api/users/me | Update username/bio/avatarUrl only |
 
-```bash
-npm install
-cp .env.example .env
-docker compose up -d
+Auth mirrors the tutorial's NestJS/Passport/JWT/bcrypt/TypeORM structure, adding
+hashed refresh tokens, rotation and active-user checks. Logout revokes the refresh
+token, not an already issued access JWT; it expires according to JWT_EXPIRES_IN.
+Controllers delegate business rules to services.
+
+## Localization and errors
+
+Use `Accept-Language: vi` or `en` (regional variants supported); fallback is English.
+Translations live in `src/i18n/{en,vi}/errors.json` and are copied into dist.
+Only messages are translated; DB enums, JSON field names, statusCode and code stay stable.
+
+Error shape: `{statusCode, error, code, message, path, requestId, timestamp}`.
+Example: code `errors.invalidCredentials`; message varies with locale.
+Validation rejects unknown fields and returns localized field messages without values.
+Every request receives `x-request-id`, including requests rejected by guards.
+Missing translation keys fall back to a safe status message; internal errors never expose stacks.
+
+## Database
+
+10 entities, 9 ordered migrations and 13 foreign-key relationships.
+Scalar FK columns remain available for explicit queries; relations are not eager-loaded
+and cascading ORM writes are disabled. PostgreSQL ON DELETE rules are separate.
+TypeORM synchronize is disabled. Never edit a migration already applied to a shared DB.
+Inspect generated schema differences before introducing a new incremental migration.
+
+Includes catalog, booking, review, image and social identity **schema only**.
+No domain controllers, mail processors, cron jobs or OAuth endpoints are enabled here.
+
+## Verification
+
+```sh
 npm run build
-npm run start:dev
+npx eslint "{src,apps,libs,test}/**/*.ts"
+npm test -- --runInBand
+npm run test:e2e -- --runInBand test/i18n.e2e-spec.ts
 ```
 
-Do project dùng migration thay vì `synchronize`, migration sẽ được chạy chủ động:
+Database e2e tests are destructive **only to an explicitly selected disposable DB**.
+Create a new database named `booking_tour_f00_<unique>_test`; do not point at development
+or production data. The auth suite refuses names outside this pattern.
+Use the same DB_TEST_NAME for migrations and tests:
 
-```bash
-npm run db:migration:run
+```sh
+NODE_ENV=test DB_TEST_NAME=booking_tour_f00_example_test npm run db:migration:run:test
+NODE_ENV=test DB_TEST_NAME=booking_tour_f00_example_test npm run test:e2e -- --runInBand
 ```
 
-Mặc định API chạy tại `http://localhost:3001/api`, Swagger tại `http://localhost:3001/docs`.
+The database must already exist. Do not use seed reset to prepare an existing database.
+Basic seed script is a placeholder; domain seeding is deferred to B5.
 
-## Cấu trúc module
+## Debugging
 
-```text
-src/
-├── auth/             # register, login, logout, JWT/OAuth
-├── users/            # profile và user management
-├── categories/       # category CRUD
-├── tours/            # tour, departure, public search, admin CRUD
-├── bookings/         # đặt tour, trạng thái, approve/reject/cancel
-├── reviews/          # review và moderation
-├── files/            # upload và metadata file
-├── notifications/    # mail service, Bull queues và processors
-├── scheduler/        # cron jobs và các use case định kỳ
-├── common/           # guards, decorators, filters, interceptors, pipes
-├── config/           # environment và database config
-└── database/         # DataSource, migration và seed
-```
-
-## Scripts chính
-
-```bash
-npm run start:dev
-npm run test
-npm run test:e2e -- --runInBand
-npm run build
-npm run db:migration:run
-npm run db:migration:revert
-npm run db:seed
-npm run db:seed:reset
-```
+`npm run start:debug` runs the Nest inspector; `npm run test:debug` runs Jest inspector.
+Trace failures using x-request-id without logging passwords or raw tokens.
+Schema files and tests are versioned; Plans/ and docs/ are local-only and ignored.
