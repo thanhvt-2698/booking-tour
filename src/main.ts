@@ -1,20 +1,16 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import {
+  DEFAULT_API_PREFIX,
+  DEFAULT_PORT,
+} from './common/constants/app.constants';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const apiPrefix = process.env.API_PREFIX ?? 'api';
+  const apiPrefix = process.env.API_PREFIX ?? DEFAULT_API_PREFIX;
 
   app.setGlobalPrefix(apiPrefix);
-  app.useGlobalPipes(
-    new ValidationPipe({
-      forbidNonWhitelisted: true,
-      transform: true,
-      whitelist: true,
-    }),
-  );
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Booking Tour API')
@@ -40,7 +36,7 @@ async function bootstrap() {
     jsonDocumentUrl: 'docs-json',
   });
 
-  await app.listen(process.env.PORT ?? 3001);
+  await app.listen(process.env.PORT ?? DEFAULT_PORT);
 }
 
 void bootstrap();

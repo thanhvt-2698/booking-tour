@@ -25,7 +25,17 @@ describe('AppController (e2e)', () => {
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
+  });
+
+  it('does not expose deferred authentication or profile endpoints', async () => {
+    for (const route of ['register', 'login', 'refresh', 'logout']) {
+      await request(app.getHttpServer()).post(`/api/auth/${route}`).expect(404);
+    }
+    await request(app.getHttpServer()).get('/api/users/me').expect(404);
+    await request(app.getHttpServer()).patch('/api/users/me').expect(404);
   });
 
   it('/api (GET)', () => {

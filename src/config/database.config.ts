@@ -23,7 +23,7 @@ export function getDatabaseOptions(): DataSourceOptions {
     migrations: [join(__dirname, '../database/migrations/*{.js,.ts}')],
     migrationsTableName: 'typeorm_migrations',
     password: process.env.DB_PASSWORD ?? 'nestjs',
-    port: parsePort(process.env.DB_PORT, 5432),
+    port: parsePort(process.env.DB_PORT, 5433),
     synchronize: false,
     type: 'postgres',
     username: process.env.DB_USERNAME ?? 'nestjs',

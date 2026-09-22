@@ -1,67 +1,69 @@
 # Booking Tour API
 
-Backend-only API cho hệ thống đặt tour du lịch, được xây dựng để thực hành và mở rộng các kiến thức trong project `nestjs-tutorial`.
+## Công nghệ
 
-## Mục tiêu học tập
+- Node.js, TypeScript, NestJS 11 (Express).
+- PostgreSQL 16, TypeORM.
+- Joi, class-validator, class-transformer.
+- nestjs-i18n, Swagger/OpenAPI, NestJS Throttler.
+- Jest, Supertest, ESLint, Prettier.
+- Docker Compose.
 
-- Tái sử dụng modular architecture, DTO validation, JWT, TypeORM, migration, Swagger, unit test và e2e test.
-- Bổ sung RBAC, upload file, Redis/Bull queue, gửi email bất đồng bộ, scheduler, seeder CLI và kỹ thuật debug.
-- Ưu tiên correctness trước, sau đó đo lường và tối ưu các query có nguy cơ trở thành bottleneck.
+## Yêu cầu môi trường
 
-## Công nghệ dự kiến
+- Node.js >= 22.22.3 và npm.
+- Docker và Docker Compose.
 
-- NestJS 11, TypeScript strict mode.
-- PostgreSQL 16 và TypeORM.
-- Redis 7 và `@nestjs/bull` cho email/background jobs.
-- `@nestjs/schedule` cho các tác vụ định kỳ.
-- Jest, Supertest, Swagger/OpenAPI.
-- Docker Compose cho PostgreSQL và Redis.
+## Setup project
 
-## Khởi động
+### 1. Clone và cài dependencies
 
-```bash
-npm install
+```sh
+git clone git@github.com:thanhvt-2698/booking-tour.git
+cd booking-tour
+npm ci
+```
+
+### 2. Cấu hình môi trường
+
+```sh
 cp .env.example .env
-docker compose up -d
-npm run build
-npm run start:dev
 ```
 
-Do project dùng migration thay vì `synchronize`, migration sẽ được chạy chủ động:
+Cấu hình PostgreSQL local theo Docker Compose:
 
-```bash
+```dotenv
+NODE_ENV=development
+PORT=3001
+API_PREFIX=api
+DB_HOST=localhost
+DB_PORT=5433
+DB_USERNAME=nestjs
+DB_PASSWORD=nestjs
+DB_NAME=booking_tour
+DB_TEST_NAME=booking_tour_test
+```
+
+### 3. Khởi động database và chạy migrations
+
+```sh
+docker compose up -d --wait postgres
 npm run db:migration:run
 ```
 
-Mặc định API chạy tại `http://localhost:3001/api`, Swagger tại `http://localhost:3001/docs`.
+### 4. Chạy ứng dụng
 
-## Cấu trúc module
-
-```text
-src/
-├── auth/             # register, login, logout, JWT/OAuth
-├── users/            # profile và user management
-├── categories/       # category CRUD
-├── tours/            # tour, departure, public search, admin CRUD
-├── bookings/         # đặt tour, trạng thái, approve/reject/cancel
-├── reviews/          # review và moderation
-├── files/            # upload và metadata file
-├── notifications/    # mail service, Bull queues và processors
-├── scheduler/        # cron jobs và các use case định kỳ
-├── common/           # guards, decorators, filters, interceptors, pipes
-├── config/           # environment và database config
-└── database/         # DataSource, migration và seed
+```sh
+npm run start:dev
 ```
 
-## Scripts chính
+- API: http://localhost:3001/api
+- Swagger: http://localhost:3001/docs
+- OpenAPI JSON: http://localhost:3001/docs-json
 
-```bash
-npm run start:dev
-npm run test
-npm run test:e2e -- --runInBand
+### 5. Build và chạy bản build
+
+```sh
 npm run build
-npm run db:migration:run
-npm run db:migration:revert
-npm run db:seed
-npm run db:seed:reset
+npm run start:prod
 ```
