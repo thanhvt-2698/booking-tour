@@ -20,7 +20,7 @@ class Input {
 @Controller('probe')
 class ProbeController {
   @Get() fail(): void {
-    throw new UnauthorizedException('errors.invalidCredentials');
+    throw new UnauthorizedException('errors.unauthorized');
   }
   @Get('missing') missing(): void {
     throw new UnauthorizedException('errors.missingKey');
@@ -59,15 +59,15 @@ describe('HTTP i18n contract (no database)', () => {
       ),
     );
     expect(responses[0].body).toMatchObject({
-      code: 'errors.invalidCredentials',
-      message: 'Email hoặc mật khẩu không đúng',
+      code: 'errors.unauthorized',
+      message: 'Yêu cầu đăng nhập',
     });
     expect(responses[1].body).toMatchObject({
-      code: 'errors.invalidCredentials',
-      message: 'Invalid email or password',
+      code: 'errors.unauthorized',
+      message: 'Authentication required',
     });
     expect(responses[2].body).toMatchObject({
-      message: 'Invalid email or password',
+      message: 'Authentication required',
     });
     expect(responses[0].headers['x-request-id']).toEqual(expect.any(String));
   });

@@ -1,9 +1,4 @@
 {
-  "invalidCredentials": "Invalid email or password",
-  "invalidRefreshToken": "Invalid refresh token",
-  "userConflict": "Email or username is already in use",
-  "usernameConflict": "Username is already in use",
-  "userNotFound": "User does not exist",
   "validation": "Validation failed",
   "validationField": "Invalid or unexpected field: {field}",
   "badRequest": "Invalid request",
