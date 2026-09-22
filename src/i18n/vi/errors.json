@@ -1,4 +1,12 @@
 {
+  "invalidCredentials": "Email hoặc mật khẩu không đúng",
+  "invalidRefreshToken": "Refresh token không hợp lệ",
+  "userConflict": "Email hoặc tên đăng nhập đã được sử dụng",
+  "usernameConflict": "Tên đăng nhập đã được sử dụng",
+  "userNotFound": "Người dùng không tồn tại",
+  "cannotChangeOwnAdminRole": "Bạn không thể tự xóa quyền quản trị của mình",
+  "cannotBlockOwnAccount": "Bạn không thể tự khóa tài khoản của mình",
+  "lastActiveAdmin": "Hệ thống phải luôn có ít nhất một quản trị viên đang hoạt động",
   "validation": "Dữ liệu không hợp lệ",
   "validationField": "Trường không hợp lệ hoặc không được phép: {field}",
   "badRequest": "Yêu cầu không hợp lệ",

@@ -1,4 +1,4 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -14,13 +14,6 @@ describe('AppController (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix(process.env.API_PREFIX ?? 'api');
-    app.useGlobalPipes(
-      new ValidationPipe({
-        forbidNonWhitelisted: true,
-        transform: true,
-        whitelist: true,
-      }),
-    );
     await app.init();
   });
 
@@ -28,14 +21,6 @@ describe('AppController (e2e)', () => {
     if (app) {
       await app.close();
     }
-  });
-
-  it('does not expose deferred authentication or profile endpoints', async () => {
-    for (const route of ['register', 'login', 'refresh', 'logout']) {
-      await request(app.getHttpServer()).post(`/api/auth/${route}`).expect(404);
-    }
-    await request(app.getHttpServer()).get('/api/users/me').expect(404);
-    await request(app.getHttpServer()).patch('/api/users/me').expect(404);
   });
 
   it('/api (GET)', () => {

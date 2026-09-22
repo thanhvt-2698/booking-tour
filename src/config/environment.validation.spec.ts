@@ -1,10 +1,20 @@
 import { validateEnvironment } from './environment.validation';
 
 describe('Environment configuration', () => {
-  it('boots without credentials for deferred authentication and integrations', () => {
-    for (const NODE_ENV of ['development', 'production']) {
-      expect(validateEnvironment({ NODE_ENV }).NODE_ENV).toBe(NODE_ENV);
-    }
+  it('uses development JWT defaults but requires a strong production secret', () => {
+    expect(
+      validateEnvironment({ NODE_ENV: 'development' }).JWT_SECRET,
+    ).toHaveLength(34);
+    expect(() => validateEnvironment({ NODE_ENV: 'production' })).toThrow();
+    expect(() =>
+      validateEnvironment({ NODE_ENV: 'production', JWT_SECRET: 'short' }),
+    ).toThrow();
+    expect(
+      validateEnvironment({
+        NODE_ENV: 'production',
+        JWT_SECRET: 'x'.repeat(40),
+      }).NODE_ENV,
+    ).toBe('production');
   });
 
   it('rejects invalid database and application configuration', () => {

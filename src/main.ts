@@ -22,7 +22,7 @@ async function bootstrap() {
         scheme: 'bearer',
         type: 'http',
       },
-      'jwt',
+      'access-token',
     )
     .addTag('Authentication')
     .addTag('Tours')
