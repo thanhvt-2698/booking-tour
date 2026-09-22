@@ -9,6 +9,7 @@ import { TourDepartureEntity } from '../src/tours/entities/tour-departure.entity
 import { BookingEntity } from '../src/bookings/entities/booking.entity';
 import { BookingStatusHistoryEntity } from '../src/bookings/entities/booking-status-history.entity';
 import { BookingStatus } from '../src/bookings/constants/booking.constants';
+import { POSTGRES_UNIQUE_VIOLATION_CODE } from '../src/database/constants/database.constants';
 
 describe('Migrated schema integration', () => {
   let source: DataSource;
@@ -117,7 +118,7 @@ describe('Migrated schema integration', () => {
         email: `${suffix}@example.com`,
         username: `${suffix}_2`,
       }),
-    ).rejects.toMatchObject({ code: '23505' });
+    ).rejects.toMatchObject({ code: POSTGRES_UNIQUE_VIOLATION_CODE });
   });
 
   it('preserves audit history with SET NULL and restricts deleting an owner', async () => {

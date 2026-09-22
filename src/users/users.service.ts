@@ -9,6 +9,7 @@ import { DataSource } from 'typeorm';
 import type { EntityManager } from 'typeorm';
 import type { Repository } from 'typeorm';
 import { createPaginationMeta } from '../common/dto/pagination-response.dto';
+import { POSTGRES_UNIQUE_VIOLATION_CODE } from '../database/constants/database.constants';
 import { UserRole, UserStatus } from './constants/user.constants';
 import type { AdminUserQueryDto } from './dto/admin-user-query.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
@@ -20,6 +21,17 @@ import type { CreateUserInput } from './interfaces/create-user-input.interface';
 import type { UserResponse } from './interfaces/user-response.interface';
 
 const ACTIVE_ADMIN_LOCK = 'booking-tour:active-admin';
+const USER_PUBLIC_FIELDS = [
+  'id',
+  'email',
+  'username',
+  'role',
+  'status',
+  'bio',
+  'avatarUrl',
+  'createdAt',
+  'updatedAt',
+] as const;
 
 @Injectable()
 export class UsersService {
@@ -49,7 +61,10 @@ export class UsersService {
   }
 
   async findById(id: string): Promise<UserEntity | null> {
-    return this.usersRepository.findOneBy({ id });
+    return this.usersRepository.findOne({
+      select: [...USER_PUBLIC_FIELDS],
+      where: { id },
+    });
   }
 
   async findRequiredById(id: string): Promise<UserEntity> {
@@ -62,12 +77,27 @@ export class UsersService {
     return user;
   }
 
+  async getProfile(id: string): Promise<UserResponse> {
+    return this.toResponse(await this.findRequiredById(id));
+  }
+
   async findByEmail(
     email: string,
     includePasswordHash = false,
   ): Promise<UserEntity | null> {
     const query = this.usersRepository
       .createQueryBuilder('user')
+      .select([
+        'user.id',
+        'user.email',
+        'user.username',
+        'user.role',
+        'user.status',
+        'user.bio',
+        'user.avatarUrl',
+        'user.createdAt',
+        'user.updatedAt',
+      ])
       .where('user.email = :email', {
         email: this.normalizeEmail(email),
       });
@@ -82,6 +112,17 @@ export class UsersService {
   async findForAdmin(query: AdminUserQueryDto): Promise<AdminUserList> {
     const usersQuery = this.usersRepository
       .createQueryBuilder('user')
+      .select([
+        'user.id',
+        'user.email',
+        'user.username',
+        'user.role',
+        'user.status',
+        'user.bio',
+        'user.avatarUrl',
+        'user.createdAt',
+        'user.updatedAt',
+      ])
       .orderBy('user.created_at', 'DESC')
       .addOrderBy('user.id', 'DESC')
       .skip(query.offset)
@@ -106,7 +147,14 @@ export class UsersService {
     id: string,
     input: UpdateProfileDto,
   ): Promise<UserEntity> {
-    const user = await this.findRequiredById(id);
+    const user = await this.usersRepository.findOne({
+      select: ['id', 'avatarUrl', 'bio', 'username'],
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('errors.userNotFound');
+    }
     const updates: Partial<UserEntity> = {};
 
     if (input.avatarUrl !== undefined) {
@@ -130,6 +178,13 @@ export class UsersService {
 
       throw error;
     }
+  }
+
+  async updateProfileResponse(
+    id: string,
+    input: UpdateProfileDto,
+  ): Promise<UserResponse> {
+    return this.toResponse(await this.updateProfile(id, input));
   }
 
   async updateRole(
@@ -167,6 +222,14 @@ export class UsersService {
     });
   }
 
+  async updateRoleResponse(
+    actorId: string,
+    targetId: string,
+    input: UpdateUserRoleDto,
+  ): Promise<UserResponse> {
+    return this.toResponse(await this.updateRole(actorId, targetId, input));
+  }
+
   async updateStatus(
     actorId: string,
     targetId: string,
@@ -196,6 +259,18 @@ export class UsersService {
 
       return repository.save(target);
     });
+  }
+
+  async updateStatusResponse(
+    actorId: string,
+    targetId: string,
+    input: UpdateUserStatusDto,
+  ): Promise<UserResponse> {
+    return this.toResponse(await this.updateStatus(actorId, targetId, input));
+  }
+
+  async findForAdminById(id: string): Promise<UserResponse> {
+    return this.toResponse(await this.findRequiredById(id));
   }
 
   toResponse(user: UserEntity): UserResponse {
@@ -229,6 +304,7 @@ export class UsersService {
     id: string,
   ): Promise<UserEntity> {
     const user = await usersRepository.findOne({
+      select: ['id', 'role', 'status'],
       lock: { mode: 'pessimistic_write' },
       where: { id },
     });
@@ -245,7 +321,7 @@ export class UsersService {
       typeof error === 'object' &&
       error !== null &&
       'code' in error &&
-      error.code === '23505'
+      error.code === POSTGRES_UNIQUE_VIOLATION_CODE
     );
   }
 

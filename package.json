@@ -26,7 +26,6 @@
     "db:migration:run:test": "NODE_ENV=test typeorm-ts-node-commonjs -d src/database/data-source.ts migration:run",
     "db:migration:show:test": "NODE_ENV=test typeorm-ts-node-commonjs -d src/database/data-source.ts migration:show",
     "db:seed": "ts-node -r tsconfig-paths/register src/database/seeds/seed.ts",
-    "db:seed:reset": "NODE_ENV=development ts-node -r tsconfig-paths/register src/database/seeds/seed.ts --reset",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",

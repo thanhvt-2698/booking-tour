@@ -54,11 +54,10 @@ export class AdminUsersController {
   @ApiOperation({ summary: 'Get a user by ID' })
   @ApiParam({ name: 'userId', format: 'uuid' })
   @ApiOkResponse({ type: UserResponseDto })
-  async findUser(
+  findUser(
     @Param('userId', new ParseUUIDPipe({ version: '4' })) userId: string,
   ): Promise<UserResponseDto> {
-    const user = await this.usersService.findRequiredById(userId);
-    return this.usersService.toResponse(user);
+    return this.usersService.findForAdminById(userId);
   }
 
   @Patch(':userId/role')
@@ -68,14 +67,12 @@ export class AdminUsersController {
   @ApiConflictResponse({
     description: 'The last active admin cannot be removed',
   })
-  async updateRole(
+  updateRole(
     @CurrentUser() actor: UserEntity,
     @Param('userId', new ParseUUIDPipe({ version: '4' })) userId: string,
     @Body() input: UpdateUserRoleDto,
   ): Promise<UserResponseDto> {
-    const user = await this.usersService.updateRole(actor.id, userId, input);
-
-    return this.usersService.toResponse(user);
+    return this.usersService.updateRoleResponse(actor.id, userId, input);
   }
 
   @Patch(':userId/status')
@@ -85,13 +82,11 @@ export class AdminUsersController {
   @ApiConflictResponse({
     description: 'The last active admin cannot be blocked',
   })
-  async updateStatus(
+  updateStatus(
     @CurrentUser() actor: UserEntity,
     @Param('userId', new ParseUUIDPipe({ version: '4' })) userId: string,
     @Body() input: UpdateUserStatusDto,
   ): Promise<UserResponseDto> {
-    const user = await this.usersService.updateStatus(actor.id, userId, input);
-
-    return this.usersService.toResponse(user);
+    return this.usersService.updateStatusResponse(actor.id, userId, input);
   }
 }

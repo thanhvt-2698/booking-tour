@@ -56,7 +56,17 @@ docker compose up -d --wait postgres
 npm run db:migration:run
 ```
 
-### 4. Chạy ứng dụng
+### 4. Tạo tài khoản admin đầu tiên
+
+Thêm `SEED_ADMIN_PASSWORD` vào file `.env`, sau đó chạy seeder:
+
+```sh
+npm run db:seed
+```
+
+Seeder có tính idempotent: chạy lại sẽ không thay đổi mật khẩu hoặc tạo bản ghi admin trùng.
+
+### 5. Chạy ứng dụng
 
 ```sh
 npm run start:dev

@@ -53,6 +53,7 @@ describe('AuthService', () => {
       UnauthorizedException,
     );
     expect(findOne).toHaveBeenCalledWith({
+      select: ['id', 'userId', 'familyId', 'expiresAt', 'revokedAt'],
       lock: { mode: 'pessimistic_write' },
       where: { tokenHash: expect.any(String) as unknown },
     });

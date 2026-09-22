@@ -26,19 +26,17 @@ export class UsersController {
   @Get('me')
   @ApiOperation({ summary: 'Get the authenticated user profile' })
   @ApiOkResponse({ type: UserResponseDto })
-  getCurrentUser(@CurrentUser() user: UserEntity): UserResponseDto {
-    return this.usersService.toResponse(user);
+  getCurrentUser(@CurrentUser() user: UserEntity): Promise<UserResponseDto> {
+    return this.usersService.getProfile(user.id);
   }
 
   @Patch('me')
   @ApiOperation({ summary: 'Update the authenticated user profile' })
   @ApiOkResponse({ type: UserResponseDto })
-  async updateCurrentUser(
+  updateCurrentUser(
     @CurrentUser() user: UserEntity,
     @Body() input: UpdateProfileDto,
   ): Promise<UserResponseDto> {
-    const updatedUser = await this.usersService.updateProfile(user.id, input);
-
-    return this.usersService.toResponse(updatedUser);
+    return this.usersService.updateProfileResponse(user.id, input);
   }
 }

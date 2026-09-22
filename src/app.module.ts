@@ -6,6 +6,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { DEFAULT_RATE_LIMIT_WINDOW_MS } from './common/constants/app.constants';
 import { HttpFoundationModule } from './common/http-foundation.module';
 import { getDatabaseConfig } from './config/database.config';
 import { validateEnvironment } from './config/environment.validation';
@@ -16,7 +17,9 @@ import { UsersModule } from './users/users.module';
     ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
     HttpFoundationModule,
     TypeOrmModule.forRoot(getDatabaseConfig()),
-    ThrottlerModule.forRoot([{ limit: 100, ttl: 60000 }]),
+    ThrottlerModule.forRoot([
+      { limit: 100, ttl: DEFAULT_RATE_LIMIT_WINDOW_MS },
+    ]),
     AuthModule,
     UsersModule,
   ],

@@ -1,5 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import type { DataSource, Repository } from 'typeorm';
+import { POSTGRES_UNIQUE_VIOLATION_CODE } from '../database/constants/database.constants';
 import { UserRole, UserStatus } from './constants/user.constants';
 import { UserEntity } from './entities/user.entity';
 import { UsersService } from './users.service';
@@ -40,7 +41,9 @@ describe('UsersService', () => {
   it('maps unique constraint violations to conflict', async () => {
     const createdUser = {} as UserEntity;
     repository.create.mockReturnValue(createdUser);
-    repository.save.mockRejectedValue({ code: '23505' });
+    repository.save.mockRejectedValue({
+      code: POSTGRES_UNIQUE_VIOLATION_CODE,
+    });
 
     await expect(
       service.create({

@@ -62,6 +62,7 @@ export class AuthService {
     const pair = await this.dataSource.transaction(async (manager) => {
       const refreshTokensRepository = manager.getRepository(RefreshTokenEntity);
       const storedToken = await refreshTokensRepository.findOne({
+        select: ['id', 'userId', 'familyId', 'expiresAt', 'revokedAt'],
         lock: { mode: 'pessimistic_write' },
         where: { tokenHash },
       });
