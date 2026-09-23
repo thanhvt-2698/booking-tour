@@ -3,6 +3,7 @@ dist/
 coverage/
 Plans/
 docs/
+PROJECT_RULES.md
 tutorial.md
 
 .env

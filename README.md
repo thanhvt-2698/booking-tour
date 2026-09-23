@@ -36,6 +36,11 @@ Cấu hình PostgreSQL local theo Docker Compose:
 NODE_ENV=development
 PORT=3001
 API_PREFIX=api
+JWT_SECRET=replace-with-a-long-random-secret
+JWT_EXPIRES_IN=1h
+JWT_ISSUER=booking-tour-api
+JWT_AUDIENCE=booking-tour-client
+REFRESH_TOKEN_TTL_DAYS=30
 DB_HOST=localhost
 DB_PORT=5433
 DB_USERNAME=nestjs
@@ -51,7 +56,17 @@ docker compose up -d --wait postgres
 npm run db:migration:run
 ```
 
-### 4. Chạy ứng dụng
+### 4. Tạo tài khoản admin đầu tiên
+
+Thêm `SEED_ADMIN_PASSWORD` vào file `.env`, sau đó chạy seeder:
+
+```sh
+npm run db:seed
+```
+
+Seeder có tính idempotent: chạy lại sẽ không thay đổi mật khẩu hoặc tạo bản ghi admin trùng.
+
+### 5. Chạy ứng dụng
 
 ```sh
 npm run start:dev

@@ -24,10 +24,6 @@ export class UserEntity {
   @Column({ length: 254, type: 'varchar' })
   email!: string;
 
-  @Index('IDX_users_username_unique', { unique: true })
-  @Column({ length: 30, type: 'varchar' })
-  username!: string;
-
   @Column({
     length: 255,
     name: 'password_hash',

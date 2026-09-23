@@ -1,4 +1,11 @@
 {
+  "invalidCredentials": "Invalid email or password",
+  "invalidRefreshToken": "Invalid refresh token",
+  "userConflict": "Email is already in use",
+  "userNotFound": "User does not exist",
+  "cannotChangeOwnAdminRole": "You cannot remove your own admin role",
+  "cannotBlockOwnAccount": "You cannot block your own account",
+  "lastActiveAdmin": "The system must keep one active admin",
   "validation": "Validation failed",
   "validationField": "Invalid or unexpected field: {field}",
   "badRequest": "Invalid request",

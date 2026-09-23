@@ -131,13 +131,10 @@ export class InitialSchema1790050446359 implements MigrationInterface {
       `CREATE TYPE "public"."user_status_enum" AS ENUM('ACTIVE', 'BLOCKED')`,
     );
     await queryRunner.query(
-      `CREATE TABLE "users" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "email" character varying(254) NOT NULL, "username" character varying(30) NOT NULL, "password_hash" character varying(255), "role" "public"."user_role_enum" NOT NULL DEFAULT 'USER', "status" "public"."user_status_enum" NOT NULL DEFAULT 'ACTIVE', "bio" text, "avatar_url" character varying(2048), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"))`,
+      `CREATE TABLE "users" ("id" uuid NOT NULL DEFAULT uuid_generate_v4(), "email" character varying(254) NOT NULL, "password_hash" character varying(255), "role" "public"."user_role_enum" NOT NULL DEFAULT 'USER', "status" "public"."user_status_enum" NOT NULL DEFAULT 'ACTIVE', "bio" text, "avatar_url" character varying(2048), "created_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(), CONSTRAINT "PK_a3ffb1c0c8416b9fc6f907b7433" PRIMARY KEY ("id"))`,
     );
     await queryRunner.query(
       `CREATE UNIQUE INDEX "IDX_users_email_unique" ON "users" ("email") `,
-    );
-    await queryRunner.query(
-      `CREATE UNIQUE INDEX "IDX_users_username_unique" ON "users" ("username") `,
     );
     await queryRunner.query(
       `ALTER TABLE "refresh_tokens" ADD CONSTRAINT "FK_refresh_tokens_user_id" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION`,
@@ -220,7 +217,6 @@ export class InitialSchema1790050446359 implements MigrationInterface {
     await queryRunner.query(
       `ALTER TABLE "refresh_tokens" DROP CONSTRAINT "FK_refresh_tokens_user_id"`,
     );
-    await queryRunner.query(`DROP INDEX "public"."IDX_users_username_unique"`);
     await queryRunner.query(`DROP INDEX "public"."IDX_users_email_unique"`);
     await queryRunner.query(`DROP TABLE "users"`);
     await queryRunner.query(`DROP TYPE "public"."user_status_enum"`);

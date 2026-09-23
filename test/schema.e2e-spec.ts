@@ -9,6 +9,7 @@ import { TourDepartureEntity } from '../src/tours/entities/tour-departure.entity
 import { BookingEntity } from '../src/bookings/entities/booking.entity';
 import { BookingStatusHistoryEntity } from '../src/bookings/entities/booking-status-history.entity';
 import { BookingStatus } from '../src/bookings/constants/booking.constants';
+import { POSTGRES_UNIQUE_VIOLATION_CODE } from '../src/database/constants/database.constants';
 
 describe('Migrated schema integration', () => {
   let source: DataSource;
@@ -68,7 +69,6 @@ describe('Migrated schema integration', () => {
     const suffix = randomUUID().slice(0, 8);
     const user = await runner.manager.save(UserEntity, {
       email: `${suffix}@example.com`,
-      username: suffix,
       passwordHash: 'hidden',
     });
     await runner.manager.save(RefreshTokenEntity, {
@@ -110,14 +110,12 @@ describe('Migrated schema integration', () => {
     const suffix = randomUUID().slice(0, 8);
     await runner.manager.save(UserEntity, {
       email: `${suffix}@example.com`,
-      username: suffix,
     });
     await expect(
       runner.manager.save(UserEntity, {
         email: `${suffix}@example.com`,
-        username: `${suffix}_2`,
       }),
-    ).rejects.toMatchObject({ code: '23505' });
+    ).rejects.toMatchObject({ code: POSTGRES_UNIQUE_VIOLATION_CODE });
   });
 
   it('preserves audit history with SET NULL and restricts deleting an owner', async () => {
@@ -125,11 +123,9 @@ describe('Migrated schema integration', () => {
     const manager = runner.manager;
     const owner = await manager.save(UserEntity, {
       email: `${suffix}@example.com`,
-      username: suffix,
     });
     const actor = await manager.save(UserEntity, {
       email: `${suffix}_actor@example.com`,
-      username: `${suffix}_actor`,
     });
     const category = await manager.save(CategoryEntity, {
       name: suffix,

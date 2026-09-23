@@ -38,6 +38,7 @@ export function validationDetails(
     }),
   ],
   providers: [
+    Logger,
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     {
       provide: APP_PIPE,
@@ -57,13 +58,13 @@ export function validationDetails(
   ],
 })
 export class HttpFoundationModule implements NestModule {
-  private readonly logger = new Logger('HTTP');
+  constructor(private readonly logger: Logger) {}
 
   configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply((req: RequestWithId, res: Response, next: NextFunction) => {
         const startedAt = Date.now();
-        const value = req.headers['x-request-id'];
+        const value = req.get('x-request-id');
         req.requestId =
           typeof value === 'string' && /^[\w-]{1,128}$/.test(value)
             ? value
