@@ -60,7 +60,6 @@ describe('RBAC and admin users (e2e)', () => {
       .send({
         email: 'user@example.com',
         password: 'Password12345!',
-        username: 'normal_user',
       })
       .expect(201);
     const userToken = (registerResponse.body as RegisterResponseBody)
@@ -77,12 +76,10 @@ describe('RBAC and admin users (e2e)', () => {
         passwordHash: null,
         role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
-        username: 'admin',
       }),
     );
     const adminToken = app.get(JwtService).sign({
       sub: admin.id,
-      username: admin.username,
     });
 
     const adminUsersResponse = await request(app.getHttpServer())
@@ -101,12 +98,10 @@ describe('RBAC and admin users (e2e)', () => {
         passwordHash: null,
         role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
-        username: 'admin',
       }),
     );
     const adminToken = app.get(JwtService).sign({
       sub: admin.id,
-      username: admin.username,
     });
 
     await request(app.getHttpServer())
@@ -123,7 +118,6 @@ describe('RBAC and admin users (e2e)', () => {
         passwordHash: null,
         role: UserRole.ADMIN,
         status: UserStatus.ACTIVE,
-        username: 'admin',
       }),
     );
     const target = await usersRepository.save(
@@ -132,17 +126,14 @@ describe('RBAC and admin users (e2e)', () => {
         passwordHash: null,
         role: UserRole.USER,
         status: UserStatus.ACTIVE,
-        username: 'target',
       }),
     );
     const jwtService = app.get(JwtService);
     const adminToken = jwtService.sign({
       sub: admin.id,
-      username: admin.username,
     });
     const targetToken = jwtService.sign({
       sub: target.id,
-      username: target.username,
     });
 
     await request(app.getHttpServer())

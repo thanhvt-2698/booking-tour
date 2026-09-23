@@ -283,7 +283,7 @@ describe('schema metadata', () => {
     }
 
     const expectedIndexes = new Map([
-      ['users', ['IDX_users_email_unique', 'IDX_users_username_unique']],
+      ['users', ['IDX_users_email_unique']],
       [
         'refresh_tokens',
         [

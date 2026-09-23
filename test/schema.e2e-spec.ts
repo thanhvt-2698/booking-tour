@@ -69,7 +69,6 @@ describe('Migrated schema integration', () => {
     const suffix = randomUUID().slice(0, 8);
     const user = await runner.manager.save(UserEntity, {
       email: `${suffix}@example.com`,
-      username: suffix,
       passwordHash: 'hidden',
     });
     await runner.manager.save(RefreshTokenEntity, {
@@ -111,12 +110,10 @@ describe('Migrated schema integration', () => {
     const suffix = randomUUID().slice(0, 8);
     await runner.manager.save(UserEntity, {
       email: `${suffix}@example.com`,
-      username: suffix,
     });
     await expect(
       runner.manager.save(UserEntity, {
         email: `${suffix}@example.com`,
-        username: `${suffix}_2`,
       }),
     ).rejects.toMatchObject({ code: POSTGRES_UNIQUE_VIOLATION_CODE });
   });
@@ -126,11 +123,9 @@ describe('Migrated schema integration', () => {
     const manager = runner.manager;
     const owner = await manager.save(UserEntity, {
       email: `${suffix}@example.com`,
-      username: suffix,
     });
     const actor = await manager.save(UserEntity, {
       email: `${suffix}_actor@example.com`,
-      username: `${suffix}_actor`,
     });
     const category = await manager.save(CategoryEntity, {
       name: suffix,

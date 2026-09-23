@@ -1,8 +1,7 @@
 {
   "invalidCredentials": "Invalid email or password",
   "invalidRefreshToken": "Invalid refresh token",
-  "userConflict": "Email or username is already in use",
-  "usernameConflict": "Username is already in use",
+  "userConflict": "Email is already in use",
   "userNotFound": "User does not exist",
   "cannotChangeOwnAdminRole": "You cannot remove your own admin role",
   "cannotBlockOwnAccount": "You cannot block your own account",

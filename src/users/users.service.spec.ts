@@ -27,14 +27,12 @@ describe('UsersService', () => {
     await service.create({
       email: ' User@Example.COM ',
       passwordHash: 'hash',
-      username: 'jake',
     });
 
     expect(repository.create.mock.calls[0]?.[0]).toEqual({
       email: 'user@example.com',
       passwordHash: 'hash',
       role: UserRole.USER,
-      username: 'jake',
     });
   });
 
@@ -49,7 +47,6 @@ describe('UsersService', () => {
       service.create({
         email: 'jake@example.com',
         passwordHash: 'hash',
-        username: 'jake',
       }),
     ).rejects.toBeInstanceOf(ConflictException);
   });
@@ -65,7 +62,6 @@ describe('UsersService', () => {
       role: UserRole.USER,
       status: UserStatus.ACTIVE,
       updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-      username: 'jake',
     } as UserEntity;
 
     expect(service.toResponse(user)).not.toHaveProperty('passwordHash');

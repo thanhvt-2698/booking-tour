@@ -21,18 +21,11 @@ function requiredEnvironmentVariable(name: string): string {
 
 function readAdminSeedInput() {
   const email = requiredEnvironmentVariable('SEED_ADMIN_EMAIL').toLowerCase();
-  const username = requiredEnvironmentVariable('SEED_ADMIN_USERNAME');
   const password = requiredEnvironmentVariable('SEED_ADMIN_PASSWORD');
 
   if (!/^\S+@\S+\.\S+$/.test(email)) {
     throw new SeedConfigurationError(
       '[seed] SEED_ADMIN_EMAIL must be a valid email address',
-    );
-  }
-
-  if (username.length < 3 || username.length > 30) {
-    throw new SeedConfigurationError(
-      '[seed] SEED_ADMIN_USERNAME must contain 3-30 characters',
     );
   }
 
@@ -42,32 +35,18 @@ function readAdminSeedInput() {
     );
   }
 
-  return { email, username, password };
+  return { email, password };
 }
 
 async function seedAdmin() {
-  const { email, username, password } = readAdminSeedInput();
+  const { email, password } = readAdminSeedInput();
 
   await AppDataSource.transaction(async (manager) => {
     const users = manager.getRepository(UserEntity);
-    const [userByEmail, userByUsername] = await Promise.all([
-      users.findOne({
-        select: ['id', 'email', 'username', 'role', 'status'],
-        where: { email },
-      }),
-      users.findOne({
-        select: ['id', 'email', 'username', 'role', 'status'],
-        where: { username },
-      }),
-    ]);
-
-    if (userByEmail?.id !== userByUsername?.id) {
-      throw new SeedConflictError(
-        '[seed] SEED_ADMIN_EMAIL or SEED_ADMIN_USERNAME is already used by another account',
-      );
-    }
-
-    const existingUser = userByEmail ?? userByUsername;
+    const existingUser = await users.findOne({
+      select: ['id', 'email', 'role', 'status'],
+      where: { email },
+    });
 
     if (existingUser) {
       if (
@@ -88,7 +67,6 @@ async function seedAdmin() {
       passwordHash: await bcrypt.hash(password, PASSWORD_HASH_ROUNDS),
       role: UserRole.ADMIN,
       status: UserStatus.ACTIVE,
-      username,
     });
 
     await users.save(user);

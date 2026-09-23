@@ -13,7 +13,6 @@ interface AuthResponseBody {
   refreshToken: string;
   user: {
     email: string;
-    username: string;
   };
 }
 
@@ -57,14 +56,12 @@ describe('Authentication and current user (e2e)', () => {
       .send({
         email: 'jake@example.com',
         password: 'Password12345!',
-        username: 'jake',
       })
       .expect(201);
 
     const registered = registerResponse.body as AuthResponseBody;
     expect(registered.user).toMatchObject({
       email: 'jake@example.com',
-      username: 'jake',
     });
     expect(registered.accessToken).toEqual(expect.any(String));
     expect(registered.refreshToken).toEqual(expect.any(String));
@@ -76,18 +73,16 @@ describe('Authentication and current user (e2e)', () => {
       .expect(({ body }) => {
         expect(body).toMatchObject({
           email: 'jake@example.com',
-          username: 'jake',
         });
       });
 
     const updateResponse = await request(app.getHttpServer())
       .patch('/api/users/me')
       .set('Authorization', `Bearer ${registered.accessToken}`)
-      .send({ bio: 'Backend developer', username: 'new_jake' })
+      .send({ bio: 'Backend developer' })
       .expect(200);
     expect(updateResponse.body).toMatchObject({
       bio: 'Backend developer',
-      username: 'new_jake',
     });
 
     const refreshResponse = await request(app.getHttpServer())
@@ -116,7 +111,6 @@ describe('Authentication and current user (e2e)', () => {
       .send({
         email: 'jake@example.com',
         password: 'Password12345!',
-        username: 'jake',
       })
       .expect(201);
 
@@ -135,7 +129,6 @@ describe('Authentication and current user (e2e)', () => {
     const payload = {
       email: 'unique@example.com',
       password: 'Password12345!',
-      username: 'unique',
     };
     await request(app.getHttpServer())
       .post('/api/auth/register')
@@ -148,7 +141,7 @@ describe('Authentication and current user (e2e)', () => {
       .expect(409);
     expect(duplicate.body).toMatchObject({
       code: 'errors.userConflict',
-      message: 'Email hoặc tên đăng nhập đã được sử dụng',
+      message: 'Email đã được sử dụng',
     });
     await request(app.getHttpServer())
       .post('/api/auth/register')
@@ -161,7 +154,6 @@ describe('Authentication and current user (e2e)', () => {
       .post('/api/auth/register')
       .send({
         email: 'rotate@example.com',
-        username: 'rotate',
         password: 'Password12345!',
       })
       .expect(201);
@@ -192,7 +184,6 @@ describe('Authentication and current user (e2e)', () => {
       .post('/api/auth/register')
       .send({
         email: 'blocked@example.com',
-        username: 'blocked',
         password: 'Password12345!',
       })
       .expect(201);

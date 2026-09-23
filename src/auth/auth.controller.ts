@@ -81,7 +81,7 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a USER account and issue tokens' })
   @ApiCreatedResponse({ type: AuthResponseDto })
   @ApiBadRequestResponse({ description: 'Invalid request body' })
-  @ApiConflictResponse({ description: 'Email or username is already in use' })
+  @ApiConflictResponse({ description: 'Email is already in use' })
   register(@Body() input: RegisterDto): Promise<AuthResponseDto> {
     return this.authService.register(input);
   }

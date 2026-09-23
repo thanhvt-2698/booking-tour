@@ -9,5 +9,4 @@ export interface UserResponse {
   role: UserRole;
   status: UserStatus;
   updatedAt: Date;
-  username: string;
 }

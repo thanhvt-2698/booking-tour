@@ -24,7 +24,6 @@ const ACTIVE_ADMIN_LOCK = 'booking-tour:active-admin';
 const USER_PUBLIC_FIELDS = [
   'id',
   'email',
-  'username',
   'role',
   'status',
   'bio',
@@ -46,7 +45,6 @@ export class UsersService {
       email: this.normalizeEmail(input.email),
       passwordHash: input.passwordHash,
       role: input.role ?? UserRole.USER,
-      username: input.username.trim(),
     });
 
     try {
@@ -90,7 +88,6 @@ export class UsersService {
       .select([
         'user.id',
         'user.email',
-        'user.username',
         'user.role',
         'user.status',
         'user.bio',
@@ -115,7 +112,6 @@ export class UsersService {
       .select([
         'user.id',
         'user.email',
-        'user.username',
         'user.role',
         'user.status',
         'user.bio',
@@ -148,7 +144,7 @@ export class UsersService {
     input: UpdateProfileDto,
   ): Promise<UserEntity> {
     const user = await this.usersRepository.findOne({
-      select: ['id', 'avatarUrl', 'bio', 'username'],
+      select: ['id', 'avatarUrl', 'bio'],
       where: { id },
     });
 
@@ -163,17 +159,13 @@ export class UsersService {
     if (input.bio !== undefined) {
       updates.bio = input.bio.trim();
     }
-    if (input.username !== undefined) {
-      updates.username = input.username.trim();
-    }
-
     Object.assign(user, updates);
 
     try {
       return await this.usersRepository.save(user);
     } catch (error: unknown) {
       if (this.isUniqueViolation(error)) {
-        throw new ConflictException('errors.usernameConflict');
+        throw new ConflictException('errors.userConflict');
       }
 
       throw error;
@@ -283,7 +275,6 @@ export class UsersService {
       role: user.role,
       status: user.status,
       updatedAt: user.updatedAt,
-      username: user.username,
     };
   }
 

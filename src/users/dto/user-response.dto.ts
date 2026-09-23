@@ -25,7 +25,4 @@ export class UserResponseDto {
 
   @ApiProperty()
   updatedAt!: Date;
-
-  @ApiProperty()
-  username!: string;
 }

@@ -4,5 +4,4 @@ export interface CreateUserInput {
   email: string;
   passwordHash: string | null;
   role?: UserRole;
-  username: string;
 }

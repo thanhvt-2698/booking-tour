@@ -36,7 +36,6 @@ export class AuthService {
     const user = await this.usersService.create({
       email: input.email,
       passwordHash,
-      username: input.username,
     });
 
     return this.issueTokenPair(user);
@@ -122,7 +121,6 @@ export class AuthService {
     const accessToken = await this.jwtService.signAsync(
       {
         sub: user.id,
-        username: user.username,
       },
       {
         audience: jwtConfig.audience,
