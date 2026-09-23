@@ -27,6 +27,7 @@ async function bootstrap() {
     .addTag('Authentication')
     .addTag('Tours')
     .addTag('Bookings')
+    .addTag('Categories')
     .addTag('Reviews')
     .addTag('Administration')
     .build();
