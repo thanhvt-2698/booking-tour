@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
-  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -10,35 +9,23 @@ import type { Repository } from 'typeorm';
 import { createPaginationMeta } from '../common/dto/pagination-response.dto';
 import { toSlug } from '../common/utils/slug.util';
 import { POSTGRES_UNIQUE_VIOLATION_CODE } from '../database/constants/database.constants';
-import { CategoryStatus } from './constants/category.constants';
+import {
+  CATEGORY_PUBLIC_FIELDS,
+  CATEGORY_QUERY_FIELDS,
+  CategoryStatus,
+} from './constants/category.constants';
 import type { CategoryQueryDto } from './dto/category-query.dto';
 import type { CategoryResponseDto } from './dto/category-response.dto';
 import type { CreateCategoryDto } from './dto/create-category.dto';
 import type { UpdateCategoryDto } from './dto/update-category.dto';
 import { CategoryEntity } from './entities/category.entity';
-import { CategoryPersistenceException } from './exceptions/category-persistence.exception';
 import type { CategoryList } from './interfaces/category-list.interface';
-
-const CATEGORY_PUBLIC_FIELDS = [
-  'id',
-  'name',
-  'slug',
-  'description',
-  'status',
-  'createdAt',
-  'updatedAt',
-] as const;
-
-const CATEGORY_QUERY_FIELDS = CATEGORY_PUBLIC_FIELDS.map(
-  (field) => `category.${field}`,
-);
 
 @Injectable()
 export class CategoriesService {
   constructor(
     @InjectRepository(CategoryEntity)
     private readonly categoriesRepository: Repository<CategoryEntity>,
-    private readonly logger: Logger,
   ) {}
 
   async findPublic(query: CategoryQueryDto): Promise<CategoryList> {
@@ -96,7 +83,7 @@ export class CategoriesService {
       status: CategoryStatus.ACTIVE,
     });
 
-    return this.toResponse(await this.saveCategory(category, 'create'));
+    return this.toResponse(await this.saveCategory(category));
   }
 
   async update(
@@ -119,14 +106,14 @@ export class CategoriesService {
       category.status = input.status;
     }
 
-    return this.toResponse(await this.saveCategory(category, 'update'));
+    return this.toResponse(await this.saveCategory(category));
   }
 
   async archive(id: string): Promise<CategoryResponseDto> {
     const category = await this.findRequiredById(id);
     category.status = CategoryStatus.INACTIVE;
 
-    return this.toResponse(await this.saveCategory(category, 'archive'));
+    return this.toResponse(await this.saveCategory(category));
   }
 
   private async findRequiredById(
@@ -180,18 +167,16 @@ export class CategoriesService {
 
   private async saveCategory(
     category: CategoryEntity,
-    operation: string,
   ): Promise<CategoryEntity> {
     try {
       return await this.categoriesRepository.save(category);
     } catch (error: unknown) {
       this.throwIfUniqueViolation(error);
-      this.logger.error(
-        'Category persistence failed',
-        error instanceof Error ? error.stack : undefined,
-        `CategoriesService.${operation}`,
+      return Promise.reject(
+        error instanceof Error
+          ? error
+          : new Error('Category persistence failed', { cause: error }),
       );
-      throw new CategoryPersistenceException();
     }
   }
 

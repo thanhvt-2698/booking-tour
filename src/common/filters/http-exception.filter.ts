@@ -4,6 +4,7 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { I18nContext, I18nService } from 'nestjs-i18n';
@@ -11,12 +12,22 @@ import type { RequestWithId } from '../interfaces/request-with-id.interface';
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
-  constructor(private readonly i18n: I18nService) {}
+  constructor(
+    private readonly i18n: I18nService,
+    private readonly logger: Logger,
+  ) {}
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const request = ctx.getRequest<RequestWithId>();
     const response = ctx.getResponse<Response>();
+    if (!(exception instanceof HttpException)) {
+      this.logger.error(
+        'Unhandled HTTP exception',
+        exception instanceof Error ? exception.stack : undefined,
+        'HttpExceptionFilter',
+      );
+    }
     const status =
       exception instanceof HttpException ? exception.getStatus() : 500;
     const payload =
