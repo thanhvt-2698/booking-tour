@@ -2,8 +2,9 @@ import { BadRequestException, ConflictException } from '@nestjs/common';
 import type { Repository, SelectQueryBuilder } from 'typeorm';
 import { POSTGRES_UNIQUE_VIOLATION_CODE } from '../database/constants/database.constants';
 import { CategoryStatus } from '../categories/constants/category.constants';
+import { DepartureStatus } from './constants/departure.constants';
 import { TourStatus } from './constants/tour.constants';
-import { TourQueryDto } from './dto/tour-query.dto';
+import { PublicTourQueryDto } from './dto/tour-query.dto';
 import { TourEntity } from './entities/tour.entity';
 import { ToursService } from './tours.service';
 import { CategoryEntity } from '../categories/entities/category.entity';
@@ -127,7 +128,7 @@ describe('ToursService', () => {
     } as unknown as jest.Mocked<SelectQueryBuilder<TourEntity>>;
     createQueryBuilderMock.mockReturnValue(queryBuilder);
 
-    await service.findPublic(new TourQueryDto());
+    await service.findPublic(new PublicTourQueryDto());
 
     expect(selectMock).toHaveBeenCalledWith([
       'tour.id',
@@ -145,6 +146,97 @@ describe('ToursService', () => {
     expect(andWhereMock).toHaveBeenCalledWith('tour.status = :status', {
       status: TourStatus.PUBLISHED,
     });
+  });
+
+  it('searches available departures in an inclusive calendar-date range', async () => {
+    const andWhereMock = jest.fn().mockReturnThis();
+    const queryBuilder = {
+      addOrderBy: jest.fn().mockReturnThis(),
+      andWhere: andWhereMock,
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      orderBy: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+    } as unknown as jest.Mocked<SelectQueryBuilder<TourEntity>>;
+    createQueryBuilderMock.mockReturnValue(queryBuilder);
+    const query = new PublicTourQueryDto();
+    query.departureFrom = '2030-07-01';
+    query.departureTo = '2030-07-08';
+
+    await service.findPublic(query);
+
+    expect(andWhereMock).toHaveBeenCalledWith(
+      expect.stringContaining('"departure"."start_at" < :departureTo'),
+      {
+        departureFrom: new Date('2030-07-01T00:00:00.000Z'),
+        departureStatus: DepartureStatus.OPEN,
+        departureTo: new Date('2030-07-09T00:00:00.000Z'),
+      },
+    );
+    expect(andWhereMock).toHaveBeenCalledWith(
+      expect.stringContaining('"departure"."end_at" > :departureFrom'),
+      expect.any(Object),
+    );
+    expect(andWhereMock).toHaveBeenCalledWith('tour.status = :status', {
+      status: TourStatus.PUBLISHED,
+    });
+  });
+
+  it('requires both date range bounds and rejects a reversed range', async () => {
+    const incompleteQuery = new PublicTourQueryDto();
+    incompleteQuery.departureFrom = '2030-07-01';
+
+    await expect(service.findPublic(incompleteQuery)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(createQueryBuilderMock).not.toHaveBeenCalled();
+
+    const invalidQuery = new PublicTourQueryDto();
+    invalidQuery.departureFrom = '2030-07-08';
+    invalidQuery.departureTo = '2030-07-01';
+
+    await expect(service.findPublic(invalidQuery)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    expect(createQueryBuilderMock).not.toHaveBeenCalled();
+
+    const nonexistentDateQuery = new PublicTourQueryDto();
+    nonexistentDateQuery.departureFrom = '2030-02-30';
+    nonexistentDateQuery.departureTo = '2030-03-01';
+
+    await expect(
+      service.findPublic(nonexistentDateQuery),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(createQueryBuilderMock).not.toHaveBeenCalled();
+  });
+
+  it('allows a single calendar day', async () => {
+    const andWhereMock = jest.fn().mockReturnThis();
+    const queryBuilder = {
+      addOrderBy: jest.fn().mockReturnThis(),
+      andWhere: andWhereMock,
+      getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
+      orderBy: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+    } as unknown as jest.Mocked<SelectQueryBuilder<TourEntity>>;
+    createQueryBuilderMock.mockReturnValue(queryBuilder);
+    const singleDayQuery = new PublicTourQueryDto();
+    singleDayQuery.departureFrom = '2030-07-01';
+    singleDayQuery.departureTo = '2030-07-01';
+
+    await expect(service.findPublic(singleDayQuery)).resolves.toMatchObject({
+      meta: { totalItems: 0 },
+    });
+    expect(andWhereMock).toHaveBeenCalledWith(
+      expect.stringContaining('"departure"."start_at" < :departureTo'),
+      expect.objectContaining({
+        departureFrom: new Date('2030-07-01T00:00:00.000Z'),
+        departureTo: new Date('2030-07-02T00:00:00.000Z'),
+      }),
+    );
   });
 
   it('maps duplicate code or slug to conflict', async () => {

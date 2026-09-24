@@ -4,6 +4,10 @@ export enum TourStatus {
   ARCHIVED = 'ARCHIVED',
 }
 
+export const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+export const NEXT_CALENDAR_DAY_OFFSET = 1;
+
 export const TOUR_PUBLIC_FIELDS = [
   'id',
   'categoryId',

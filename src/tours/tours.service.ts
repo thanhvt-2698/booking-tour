@@ -11,16 +11,20 @@ import { CategoryEntity } from '../categories/entities/category.entity';
 import { createPaginationMeta } from '../common/dto/pagination-response.dto';
 import { toSlug } from '../common/utils/slug.util';
 import { POSTGRES_UNIQUE_VIOLATION_CODE } from '../database/constants/database.constants';
+import { DepartureStatus } from './constants/departure.constants';
 import {
+  NEXT_CALENDAR_DAY_OFFSET,
   TOUR_PUBLIC_FIELDS,
   TOUR_QUERY_FIELDS,
   TourStatus,
 } from './constants/tour.constants';
 import type { CreateTourDto } from './dto/create-tour.dto';
-import type { TourQueryDto } from './dto/tour-query.dto';
+import type { PublicTourQueryDto, TourQueryDto } from './dto/tour-query.dto';
 import type { TourResponseDto } from './dto/tour-response.dto';
 import type { UpdateTourDto } from './dto/update-tour.dto';
 import { TourEntity } from './entities/tour.entity';
+import type { TourDepartureDateBoundaries } from './interfaces/tour-departure-date-boundaries.interface';
+import type { TourDepartureDateRange } from './interfaces/tour-departure-date-range.interface';
 import type { TourList } from './interfaces/tour-list.interface';
 
 @Injectable()
@@ -32,14 +36,17 @@ export class ToursService {
     private readonly toursRepository: Repository<TourEntity>,
   ) {}
 
-  async findPublic(query: TourQueryDto): Promise<TourList> {
-    return this.findMany(query, TourStatus.PUBLISHED);
+  async findPublic(query: PublicTourQueryDto): Promise<TourList> {
+    return this.findMany(query, TourStatus.PUBLISHED, query);
   }
 
   async findMany(
     query: TourQueryDto,
     statusOverride?: TourStatus,
+    departureRange?: TourDepartureDateRange,
   ): Promise<TourList> {
+    const departureDateBoundaries =
+      this.getDepartureDateBoundaries(departureRange);
     const toursQuery = this.toursRepository
       .createQueryBuilder('tour')
       .select(TOUR_QUERY_FIELDS)
@@ -63,6 +70,29 @@ export class ToursService {
         { keyword: `%${query.keyword.trim()}%` },
       );
     }
+    if (departureDateBoundaries) {
+      toursQuery.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM "tour_departures" "departure"
+          WHERE "departure"."tour_id" = "tour"."id"
+            AND "departure"."status" = :departureStatus
+            AND "departure"."booked_seats" < "departure"."capacity"
+            AND "departure"."start_at" > CURRENT_TIMESTAMP
+            AND (
+              "departure"."booking_deadline" IS NULL
+              OR "departure"."booking_deadline" > CURRENT_TIMESTAMP
+            )
+            AND "departure"."start_at" < :departureTo
+            AND "departure"."end_at" > :departureFrom
+        )`,
+        {
+          departureFrom: departureDateBoundaries.departureFrom,
+          departureStatus: DepartureStatus.OPEN,
+          departureTo: departureDateBoundaries.departureTo,
+        },
+      );
+    }
 
     const [tours, totalItems] = await toursQuery.getManyAndCount();
 
@@ -70,6 +100,45 @@ export class ToursService {
       meta: createPaginationMeta(query.page, query.limit, totalItems),
       tours: tours.map((tour) => this.toResponse(tour)),
     };
+  }
+
+  private getDepartureDateBoundaries(
+    departureRange?: TourDepartureDateRange,
+  ): TourDepartureDateBoundaries | undefined {
+    if (!departureRange) {
+      return undefined;
+    }
+
+    const departureFromValue = departureRange.departureFrom;
+    const departureToValue = departureRange.departureTo;
+
+    if (departureFromValue === undefined && departureToValue === undefined) {
+      return undefined;
+    }
+    if (departureFromValue === undefined || departureToValue === undefined) {
+      throw new BadRequestException('errors.departureSearchRangeIncomplete');
+    }
+
+    const departureFrom = new Date(departureFromValue);
+    const departureTo = new Date(departureToValue);
+
+    if (
+      !this.isValidDate(departureFromValue, departureFrom) ||
+      !this.isValidDate(departureToValue, departureTo) ||
+      departureFrom > departureTo
+    ) {
+      throw new BadRequestException('errors.departureSearchRangeInvalid');
+    }
+
+    departureTo.setUTCDate(departureTo.getUTCDate() + NEXT_CALENDAR_DAY_OFFSET);
+
+    return { departureFrom, departureTo };
+  }
+
+  private isValidDate(value: string, date: Date): boolean {
+    return (
+      !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value)
+    );
   }
 
   async findById(id: string): Promise<TourResponseDto> {
