@@ -7,14 +7,21 @@ import {
   ApiParam,
   ApiTags,
 } from '@nestjs/swagger';
+import { DeparturesService } from './departures.service';
+import { DepartureQueryDto } from './dto/departure-query.dto';
+import { DepartureListResponseDto } from './dto/departure-response.dto';
 import { TourQueryDto } from './dto/tour-query.dto';
 import { TourListResponseDto, TourResponseDto } from './dto/tour-response.dto';
+import type { DepartureList } from './interfaces/departure-list.interface';
 import { ToursService } from './tours.service';
 
 @Controller('tours')
 @ApiTags('Tours')
 export class ToursController {
-  constructor(private readonly toursService: ToursService) {}
+  constructor(
+    private readonly departuresService: DeparturesService,
+    private readonly toursService: ToursService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List published tours' })
@@ -22,6 +29,19 @@ export class ToursController {
   @ApiBadRequestResponse({ description: 'Invalid pagination or filter' })
   findPublic(@Query() query: TourQueryDto) {
     return this.toursService.findPublic(query);
+  }
+
+  @Get(':tourId/departures')
+  @ApiOperation({ summary: 'List available future departures for a tour' })
+  @ApiParam({ name: 'tourId', format: 'uuid' })
+  @ApiOkResponse({ type: DepartureListResponseDto })
+  @ApiBadRequestResponse({ description: 'Invalid tour ID or pagination' })
+  @ApiNotFoundResponse({ description: 'Published tour does not exist' })
+  findPublicDepartures(
+    @Param('tourId', new ParseUUIDPipe({ version: '4' })) tourId: string,
+    @Query() query: DepartureQueryDto,
+  ): Promise<DepartureList> {
+    return this.departuresService.findPublicByTour(tourId, query);
   }
 
   @Get(':tourId')
