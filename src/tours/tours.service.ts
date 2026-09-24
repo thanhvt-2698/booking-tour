@@ -175,12 +175,12 @@ export class ToursService {
   }
 
   private async ensureActiveCategory(categoryId: string): Promise<void> {
-    const category = await this.categoriesRepository.findOne({
-      select: ['id'],
-      where: { id: categoryId, status: CategoryStatus.ACTIVE },
+    const hasActiveCategory = await this.categoriesRepository.existsBy({
+      id: categoryId,
+      status: CategoryStatus.ACTIVE,
     });
 
-    if (!category) {
+    if (!hasActiveCategory) {
       throw new NotFoundException('errors.tourCategoryNotFound');
     }
   }

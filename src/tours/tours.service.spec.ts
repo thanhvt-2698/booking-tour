@@ -13,7 +13,7 @@ describe('ToursService', () => {
   let toursRepository: jest.Mocked<Repository<TourEntity>>;
   let service: ToursService;
   let createMock: jest.Mock;
-  let findOneCategoryMock: jest.Mock;
+  let existsCategoryMock: jest.Mock;
   let findOneTourMock: jest.Mock;
   let saveMock: jest.Mock;
   let createQueryBuilderMock: jest.Mock;
@@ -34,12 +34,12 @@ describe('ToursService', () => {
 
   beforeEach(() => {
     createMock = jest.fn();
-    findOneCategoryMock = jest.fn();
+    existsCategoryMock = jest.fn();
     findOneTourMock = jest.fn();
     saveMock = jest.fn();
     createQueryBuilderMock = jest.fn();
     categoriesRepository = {
-      findOne: findOneCategoryMock,
+      existsBy: existsCategoryMock,
     } as unknown as jest.Mocked<Repository<CategoryEntity>>;
     toursRepository = {
       create: createMock,
@@ -51,8 +51,7 @@ describe('ToursService', () => {
   });
 
   it('creates a draft tour with normalized values', async () => {
-    const category = { id: tour.categoryId } as CategoryEntity;
-    findOneCategoryMock.mockResolvedValue(category);
+    existsCategoryMock.mockResolvedValue(true);
     createMock.mockImplementation((input: Partial<TourEntity>) => ({
       ...tour,
       ...input,
@@ -74,9 +73,9 @@ describe('ToursService', () => {
       slug: 'tour-da-nang',
     });
 
-    expect(findOneCategoryMock).toHaveBeenCalledWith({
-      select: ['id'],
-      where: { id: tour.categoryId, status: CategoryStatus.ACTIVE },
+    expect(existsCategoryMock).toHaveBeenCalledWith({
+      id: tour.categoryId,
+      status: CategoryStatus.ACTIVE,
     });
     expect(createMock).toHaveBeenCalledWith({
       basePrice: '1500000.00',
@@ -149,7 +148,7 @@ describe('ToursService', () => {
   });
 
   it('maps duplicate code or slug to conflict', async () => {
-    findOneCategoryMock.mockResolvedValue({ id: tour.categoryId });
+    existsCategoryMock.mockResolvedValue(true);
     createMock.mockReturnValue(tour);
     saveMock.mockRejectedValue({ code: POSTGRES_UNIQUE_VIOLATION_CODE });
 
@@ -165,7 +164,7 @@ describe('ToursService', () => {
   });
 
   it('rejects a title that cannot produce a slug', async () => {
-    findOneCategoryMock.mockResolvedValue({ id: tour.categoryId });
+    existsCategoryMock.mockResolvedValue(true);
 
     await expect(
       service.create('admin-id', {
