@@ -28,6 +28,8 @@
   "departureAlreadyCompleted": "Không thể hủy lịch đã hoàn thành",
   "departureDeadlineExpired": "Không thể mở lại lịch đã hết hạn đặt chỗ",
   "departureFull": "Không thể mở lại lịch đã hết chỗ",
+  "departureSearchRangeIncomplete": "Cần cung cấp cả departureFrom và departureTo",
+  "departureSearchRangeInvalid": "departureFrom phải trước hoặc bằng departureTo",
   "cannotChangeOwnAdminRole": "Bạn không thể tự xóa quyền quản trị của mình",
   "cannotBlockOwnAccount": "Bạn không thể tự khóa tài khoản của mình",
   "lastActiveAdmin": "Hệ thống phải luôn có ít nhất một quản trị viên đang hoạt động",

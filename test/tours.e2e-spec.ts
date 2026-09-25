@@ -8,7 +8,9 @@ import type { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { CategoryStatus } from '../src/categories/constants/category.constants';
 import { CategoryEntity } from '../src/categories/entities/category.entity';
+import { DepartureStatus } from '../src/tours/constants/departure.constants';
 import { TourStatus } from '../src/tours/constants/tour.constants';
+import { TourDepartureEntity } from '../src/tours/entities/tour-departure.entity';
 import { TourEntity } from '../src/tours/entities/tour.entity';
 import { UserRole, UserStatus } from '../src/users/constants/user.constants';
 import { UserEntity } from '../src/users/entities/user.entity';
@@ -22,6 +24,7 @@ describe('Tours (e2e)', () => {
 
   let app: INestApplication<App>;
   let categoriesRepository: Repository<CategoryEntity>;
+  let departuresRepository: Repository<TourDepartureEntity>;
   let toursRepository: Repository<TourEntity>;
   let usersRepository: Repository<UserEntity>;
 
@@ -50,11 +53,17 @@ describe('Tours (e2e)', () => {
     categoriesRepository = app.get<Repository<CategoryEntity>>(
       getRepositoryToken(CategoryEntity),
     );
+    departuresRepository = app.get<Repository<TourDepartureEntity>>(
+      getRepositoryToken(TourDepartureEntity),
+    );
     toursRepository = app.get<Repository<TourEntity>>(
       getRepositoryToken(TourEntity),
     );
     usersRepository = app.get<Repository<UserEntity>>(
       getRepositoryToken(UserEntity),
+    );
+    await departuresRepository.query(
+      'TRUNCATE TABLE "tour_departures" RESTART IDENTITY CASCADE',
     );
     await toursRepository.query(
       'TRUNCATE TABLE "tours" RESTART IDENTITY CASCADE',
@@ -174,5 +183,181 @@ describe('Tours (e2e)', () => {
       .expect(403);
 
     await request(app.getHttpServer()).get('/api/tours/not-a-uuid').expect(400);
+  });
+
+  it('searches published tours by available calendar date without duplicates', async () => {
+    const admin = await usersRepository.save(
+      usersRepository.create({
+        email: 'date-search-admin@example.com',
+        passwordHash: null,
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      }),
+    );
+    const category = await categoriesRepository.save(
+      categoriesRepository.create({
+        name: 'Date search category',
+        slug: 'date-search-category',
+        status: CategoryStatus.ACTIVE,
+      }),
+    );
+    const createTour = async (code: string, status: TourStatus) =>
+      toursRepository.save(
+        toursRepository.create({
+          basePrice: '1000000.00',
+          categoryId: category.id,
+          code,
+          createdBy: admin.id,
+          currency: 'VND',
+          description: 'Tour used in date search test',
+          slug: code.toLowerCase(),
+          status,
+          title: code,
+        }),
+      );
+    const createDeparture = (
+      tourId: string,
+      schedule: {
+        bookingDeadline?: string | null;
+        bookedSeats?: number;
+        capacity?: number;
+        endAt: string;
+        startAt: string;
+        status?: DepartureStatus;
+      },
+    ) =>
+      departuresRepository.save(
+        departuresRepository.create({
+          bookingDeadline: schedule.bookingDeadline
+            ? new Date(schedule.bookingDeadline)
+            : null,
+          bookedSeats: schedule.bookedSeats ?? 0,
+          capacity: schedule.capacity ?? 10,
+          endAt: new Date(schedule.endAt),
+          startAt: new Date(schedule.startAt),
+          status: schedule.status ?? DepartureStatus.OPEN,
+          tourId,
+        }),
+      );
+    const availableTour = await createTour(
+      'SEARCH-AVAILABLE',
+      TourStatus.PUBLISHED,
+    );
+    await createDeparture(availableTour.id, {
+      endAt: '2099-07-01T02:00:00.000Z',
+      startAt: '2099-06-30T23:00:00.000Z',
+    });
+    await createDeparture(availableTour.id, {
+      endAt: '2099-07-02T13:00:00.000Z',
+      startAt: '2099-07-02T10:00:00.000Z',
+    });
+
+    const startBoundaryTour = await createTour(
+      'SEARCH-START-BOUNDARY',
+      TourStatus.PUBLISHED,
+    );
+    await createDeparture(startBoundaryTour.id, {
+      endAt: '2099-07-01T00:00:00.000Z',
+      startAt: '2099-06-30T23:00:00.000Z',
+    });
+
+    const endBoundaryTour = await createTour(
+      'SEARCH-END-BOUNDARY',
+      TourStatus.PUBLISHED,
+    );
+    await createDeparture(endBoundaryTour.id, {
+      endAt: '2099-07-02T02:00:00.000Z',
+      startAt: '2099-07-02T00:00:00.000Z',
+    });
+
+    const closedTour = await createTour('SEARCH-CLOSED', TourStatus.PUBLISHED);
+    await createDeparture(closedTour.id, {
+      endAt: '2099-07-01T02:00:00.000Z',
+      startAt: '2099-07-01T00:00:00.000Z',
+      status: DepartureStatus.CLOSED,
+    });
+
+    const fullTour = await createTour('SEARCH-FULL', TourStatus.PUBLISHED);
+    await createDeparture(fullTour.id, {
+      bookedSeats: 1,
+      capacity: 1,
+      endAt: '2099-07-01T02:00:00.000Z',
+      startAt: '2099-07-01T00:00:00.000Z',
+    });
+
+    const expiredTour = await createTour(
+      'SEARCH-EXPIRED',
+      TourStatus.PUBLISHED,
+    );
+    await createDeparture(expiredTour.id, {
+      bookingDeadline: '2005-01-01T00:00:00.000Z',
+      endAt: '2099-07-01T02:00:00.000Z',
+      startAt: '2099-07-01T00:00:00.000Z',
+    });
+
+    const startedTour = await createTour(
+      'SEARCH-STARTED',
+      TourStatus.PUBLISHED,
+    );
+    await createDeparture(startedTour.id, {
+      endAt: '2019-07-02T00:00:00.000Z',
+      startAt: '2019-07-01T00:00:00.000Z',
+    });
+
+    const cancelledTour = await createTour(
+      'SEARCH-CANCELLED',
+      TourStatus.PUBLISHED,
+    );
+    await createDeparture(cancelledTour.id, {
+      endAt: '2099-07-01T02:00:00.000Z',
+      startAt: '2099-07-01T00:00:00.000Z',
+      status: DepartureStatus.CANCELLED,
+    });
+
+    const draftTour = await createTour('SEARCH-DRAFT', TourStatus.DRAFT);
+    await createDeparture(draftTour.id, {
+      endAt: '2099-07-01T02:00:00.000Z',
+      startAt: '2099-07-01T00:00:00.000Z',
+    });
+
+    const range = {
+      departureFrom: '2099-07-01',
+      departureTo: '2099-07-01',
+    };
+    await request(app.getHttpServer())
+      .get('/api/tours')
+      .query(range)
+      .expect(200)
+      .expect(({ body }) => {
+        const response = body as {
+          meta: { totalItems: number };
+          tours: TourResponseBody[];
+        };
+        expect(response.meta.totalItems).toBe(1);
+        expect(response.tours.map((tour) => tour.id)).toEqual([
+          availableTour.id,
+        ]);
+      });
+
+    await request(app.getHttpServer())
+      .get('/api/tours')
+      .query({ departureFrom: range.departureFrom })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .get('/api/tours')
+      .query({
+        departureFrom: '2099-07-02',
+        departureTo: range.departureFrom,
+      })
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .get('/api/tours')
+      .query({
+        departureFrom: '2099-07-01T00:00:00.000Z',
+        departureTo: range.departureTo,
+      })
+      .expect(400);
   });
 });

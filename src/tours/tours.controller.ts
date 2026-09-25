@@ -10,9 +10,10 @@ import {
 import { DeparturesService } from './departures.service';
 import { DepartureQueryDto } from './dto/departure-query.dto';
 import { DepartureListResponseDto } from './dto/departure-response.dto';
-import { TourQueryDto } from './dto/tour-query.dto';
+import { PublicTourQueryDto } from './dto/tour-query.dto';
 import { TourListResponseDto, TourResponseDto } from './dto/tour-response.dto';
 import type { DepartureList } from './interfaces/departure-list.interface';
+import type { TourList } from './interfaces/tour-list.interface';
 import { ToursService } from './tours.service';
 
 @Controller('tours')
@@ -26,8 +27,10 @@ export class ToursController {
   @Get()
   @ApiOperation({ summary: 'List published tours' })
   @ApiOkResponse({ type: TourListResponseDto })
-  @ApiBadRequestResponse({ description: 'Invalid pagination or filter' })
-  findPublic(@Query() query: TourQueryDto) {
+  @ApiBadRequestResponse({
+    description: 'Invalid pagination or departure date range',
+  })
+  findPublic(@Query() query: PublicTourQueryDto): Promise<TourList> {
     return this.toursService.findPublic(query);
   }
 
