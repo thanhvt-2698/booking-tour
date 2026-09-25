@@ -40,6 +40,8 @@
   "bookingNotEnoughSeats": "Lịch khởi hành không còn đủ chỗ",
   "bookingNotCancellable": "Chỉ có thể hủy booking đang chờ duyệt",
   "bookingDepartureSeatInconsistent": "Số chỗ đã giữ của lịch khởi hành không nhất quán",
+  "bookingNotTransitionable": "Chỉ có thể duyệt hoặc từ chối booking đang chờ duyệt",
+  "bookingCreatedDateRangeInvalid": "createdFrom phải trước hoặc bằng createdTo",
   "cannotChangeOwnAdminRole": "Bạn không thể tự xóa quyền quản trị của mình",
   "cannotBlockOwnAccount": "Bạn không thể tự khóa tài khoản của mình",
   "lastActiveAdmin": "Hệ thống phải luôn có ít nhất một quản trị viên đang hoạt động",
