@@ -3,14 +3,12 @@ import { DepartureStatus } from '../tours/constants/departure.constants';
 import { TourDepartureEntity } from '../tours/entities/tour-departure.entity';
 import { TourEntity } from '../tours/entities/tour.entity';
 import { UserEntity } from '../users/entities/user.entity';
-import {
-  AdminBookingsStore,
-  AdminBookingsTransaction,
-} from './admin-bookings.store';
+import { AdminBookingsStore } from './admin-bookings.store';
 import { AdminBookingsService } from './admin-bookings.service';
 import { BookingEventsService } from './booking-events.service';
 import { BookingStatus } from './constants/booking.constants';
 import { BookingEntity } from './entities/booking.entity';
+import type { AdminBookingTransaction } from './interfaces/admin-booking-transaction.interface';
 
 describe('AdminBookingsService', () => {
   let adminBookingsService: AdminBookingsService;
@@ -149,10 +147,10 @@ describe('AdminBookingsService', () => {
       saveBooking: saveBookingMock,
       saveDeparture: saveDepartureMock,
       saveStatusHistory: saveStatusHistoryMock,
-    } as unknown as jest.Mocked<AdminBookingsTransaction>;
+    } as unknown as jest.Mocked<AdminBookingTransaction>;
     withinTransactionMock.mockImplementation(
       async (
-        operation: (item: AdminBookingsTransaction) => Promise<unknown>,
+        operation: (item: AdminBookingTransaction) => Promise<unknown>,
       ) => {
         const result = await operation(transaction);
         transactionCompleted = true;
@@ -204,9 +202,9 @@ describe('AdminBookingsService', () => {
       findBookingForUpdate: jest
         .fn()
         .mockResolvedValue({ ...fullBooking, status: BookingStatus.APPROVED }),
-    } as unknown as AdminBookingsTransaction;
+    } as unknown as AdminBookingTransaction;
     withinTransactionMock.mockImplementation(
-      (operation: (item: AdminBookingsTransaction) => Promise<unknown>) =>
+      (operation: (item: AdminBookingTransaction) => Promise<unknown>) =>
         operation(transaction),
     );
 

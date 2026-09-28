@@ -15,10 +15,8 @@ import {
 } from './constants/admin-booking.constants';
 import { BookingStatus } from './constants/booking.constants';
 import { BookingEntity } from './entities/booking.entity';
-import {
-  AdminBookingsStore,
-  AdminBookingsTransaction,
-} from './admin-bookings.store';
+import type { AdminBookingTransaction } from './interfaces/admin-booking-transaction.interface';
+import { AdminBookingsStore } from './admin-bookings.store';
 
 describe('AdminBookingsStore', () => {
   const bookingId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -106,10 +104,21 @@ describe('AdminBookingsStore', () => {
           createQueryBuilder: jest.fn().mockReturnValue(departureQuery),
         }),
     } as unknown as EntityManager;
-    const transaction = new AdminBookingsTransaction(manager);
+    const store = new AdminBookingsStore(
+      {
+        transaction: (
+          operation: (item: EntityManager) => Promise<unknown>,
+        ): Promise<unknown> => operation(manager),
+      } as DataSource,
+      {} as Repository<BookingEntity>,
+    );
 
-    await transaction.findBookingForUpdate(bookingId);
-    await transaction.findDepartureForUpdate(departureId);
+    await store.withinTransaction(
+      async (transaction: AdminBookingTransaction) => {
+        await transaction.findBookingForUpdate(bookingId);
+        await transaction.findDepartureForUpdate(departureId);
+      },
+    );
 
     expect(bookingSetLockMock).toHaveBeenCalledWith('pessimistic_write');
     expect(selectMock).toHaveBeenCalledWith(ADMIN_BOOKING_ACTION_QUERY_FIELDS);

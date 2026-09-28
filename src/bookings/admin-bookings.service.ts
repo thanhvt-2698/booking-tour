@@ -5,10 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createPaginationMeta } from '../common/dto/pagination-response.dto';
-import {
-  AdminBookingsStore,
-  AdminBookingsTransaction,
-} from './admin-bookings.store';
+import { AdminBookingsStore } from './admin-bookings.store';
 import { BookingEventsService } from './booking-events.service';
 import {
   ADMIN_BOOKING_NEXT_CALENDAR_DAY_OFFSET,
@@ -21,6 +18,7 @@ import type { AdminBookingResponseDto } from './dto/admin-booking-response.dto';
 import type { BookingEntity } from './entities/booking.entity';
 import type { AdminBookingFilters } from './interfaces/admin-booking-filters.interface';
 import type { AdminBookingList } from './interfaces/admin-booking-list.interface';
+import type { AdminBookingTransaction } from './interfaces/admin-booking-transaction.interface';
 
 @Injectable()
 export class AdminBookingsService {
@@ -207,7 +205,7 @@ export class AdminBookingsService {
   }
 
   private async releaseDepartureSeats(
-    transaction: AdminBookingsTransaction,
+    transaction: AdminBookingTransaction,
     booking: BookingEntity,
   ): Promise<void> {
     const departure = await transaction.findDepartureForUpdate(
