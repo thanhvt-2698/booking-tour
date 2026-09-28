@@ -19,6 +19,30 @@ import { TourDepartureEntity } from '../src/tours/entities/tour-departure.entity
 import { TourEntity } from '../src/tours/entities/tour.entity';
 import { UserRole, UserStatus } from '../src/users/constants/user.constants';
 import { UserEntity } from '../src/users/entities/user.entity';
+import { NOTIFICATION_MAIL_SENDER } from '../src/notifications/constants/notification.constants';
+import type { MailMessage } from '../src/notifications/interfaces/mail-message.interface';
+
+const MAIL_DELIVERY_POLL_INTERVAL_MS = 20;
+const MAIL_DELIVERY_TIMEOUT_MS = 2_000;
+
+async function waitForMailDeliveries(
+  mailSendMock: jest.Mock,
+  expectedCount: number,
+): Promise<void> {
+  const timeoutAt = Date.now() + MAIL_DELIVERY_TIMEOUT_MS;
+
+  while (Date.now() < timeoutAt) {
+    if (mailSendMock.mock.calls.length >= expectedCount) {
+      return;
+    }
+
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, MAIL_DELIVERY_POLL_INTERVAL_MS);
+    });
+  }
+
+  throw new Error('Timed out waiting for booking notification email delivery');
+}
 
 describe('Admin bookings (e2e)', () => {
   type AdminBookingResponseBody = {
@@ -33,6 +57,7 @@ describe('Admin bookings (e2e)', () => {
   let categoriesRepository: Repository<CategoryEntity>;
   let departuresRepository: Repository<TourDepartureEntity>;
   let historiesRepository: Repository<BookingStatusHistoryEntity>;
+  let mailSendMock: jest.Mock<Promise<void>, [MailMessage]>;
   let toursRepository: Repository<TourEntity>;
   let usersRepository: Repository<UserEntity>;
 
@@ -44,9 +69,14 @@ describe('Admin bookings (e2e)', () => {
         'E2E requires a disposable booking_tour_f00_*_test database',
       );
     }
+    mailSendMock = jest.fn<Promise<void>, [MailMessage]>();
+    mailSendMock.mockResolvedValue();
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(NOTIFICATION_MAIL_SENDER)
+      .useValue({ send: mailSendMock })
+      .compile();
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix(process.env.API_PREFIX ?? 'api');
@@ -263,6 +293,22 @@ describe('Admin bookings (e2e)', () => {
       BookingStatus.APPROVED,
       BookingStatus.REJECTED,
     ]);
+    await waitForMailDeliveries(mailSendMock, 2);
+    const deliveredMessages = mailSendMock.mock.calls.map(
+      ([message]) => message,
+    );
+    const approvalMail = deliveredMessages.find(
+      (message) =>
+        message.subject === 'Booking BT-ADMIN-APPROVE-001 has been approved',
+    );
+    const rejectionMail = deliveredMessages.find(
+      (message) =>
+        message.subject === 'Booking BT-ADMIN-REJECT-001 has been rejected',
+    );
+
+    expect(approvalMail).toMatchObject({ to: user.email });
+    expect(rejectionMail).toMatchObject({ to: user.email });
+    expect(rejectionMail?.text).toContain('Missing required information');
 
     await request(app.getHttpServer())
       .patch(`/api/admin/bookings/${rejectedBooking.id}/approve`)

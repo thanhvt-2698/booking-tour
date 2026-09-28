@@ -1,0 +1,34 @@
+import type { BookingEntity } from '../../bookings/entities/booking.entity';
+
+export const BOOKING_NOTIFICATION_QUEUE = 'booking-notification';
+export const BOOKING_NOTIFICATION_QUEUE_PREFIX = 'booking-tour';
+export const BOOKING_NOTIFICATION_TEST_QUEUE_PREFIX = 'booking-tour-test';
+export const BOOKING_STATUS_NOTIFICATION_JOB = 'booking-status-notification';
+export const BOOKING_NOTIFICATION_MAX_ATTEMPTS = 3;
+export const BOOKING_NOTIFICATION_BACKOFF_DELAY_MS = 1_000;
+export const BOOKING_NOTIFICATION_JOB_ID_PREFIX = 'booking-status';
+export const NOTIFICATION_MAIL_SENDER = 'NOTIFICATION_MAIL_SENDER';
+export const SMTP_TLS_PORT = 465;
+export const MAIL_ENABLED_CONFIG_KEY = 'MAIL_ENABLED';
+export const MAIL_FROM_CONFIG_KEY = 'MAIL_FROM';
+export const MAIL_HOST_CONFIG_KEY = 'MAIL_HOST';
+export const MAIL_CREDENTIAL_CONFIG_KEY = 'MAIL_PASSWORD';
+export const MAIL_PORT_CONFIG_KEY = 'MAIL_PORT';
+export const MAIL_USER_CONFIG_KEY = 'MAIL_USER';
+export const REDIS_HOST_CONFIG_KEY = 'REDIS_HOST';
+export const REDIS_CREDENTIAL_CONFIG_KEY = 'REDIS_PASSWORD';
+export const REDIS_PORT_CONFIG_KEY = 'REDIS_PORT';
+export const NODE_ENV_CONFIG_KEY = 'NODE_ENV';
+export const TEST_NODE_ENVIRONMENT = 'test';
+
+export const BOOKING_NOTIFICATION_QUERY_FIELDS: Array<keyof BookingEntity> = [
+  'id',
+  'userId',
+];
+
+export const BOOKING_NOTIFICATION_PROCESSOR_QUERY_FIELDS = [
+  'booking.id',
+  'booking.bookingCode',
+  'booking.userId',
+  'user.email',
+];
