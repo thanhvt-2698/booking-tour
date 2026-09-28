@@ -40,6 +40,8 @@
   "bookingNotEnoughSeats": "This departure does not have enough available seats",
   "bookingNotCancellable": "Only pending bookings can be cancelled",
   "bookingDepartureSeatInconsistent": "The departure seat balance is inconsistent",
+  "bookingNotTransitionable": "Only pending bookings can be approved or rejected",
+  "bookingCreatedDateRangeInvalid": "createdFrom must be earlier than or equal to createdTo",
   "cannotChangeOwnAdminRole": "You cannot remove your own admin role",
   "cannotBlockOwnAccount": "You cannot block your own account",
   "lastActiveAdmin": "The system must keep one active admin",
