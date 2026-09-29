@@ -4,6 +4,7 @@
 
 - Node.js, TypeScript, NestJS 11 (Express).
 - PostgreSQL 16, TypeORM.
+- Redis, Bull, Nodemailer/SMTP.
 - Joi, class-validator, class-transformer.
 - nestjs-i18n, Swagger/OpenAPI, NestJS Throttler.
 - Jest, Supertest, ESLint, Prettier.
@@ -49,10 +50,10 @@ DB_NAME=booking_tour
 DB_TEST_NAME=booking_tour_test
 ```
 
-### 3. Khởi động database và chạy migrations
+### 3. Khởi động hạ tầng local và chạy migrations
 
 ```sh
-docker compose up -d --wait postgres
+docker compose up -d --wait
 npm run db:migration:run
 ```
 
@@ -76,7 +77,7 @@ npm run start:dev
 - Swagger: http://localhost:3001/docs
 - OpenAPI JSON: http://localhost:3001/docs-json
 
-### 5. Build và chạy bản build
+### 6. Build và chạy bản build
 
 ```sh
 npm run build
