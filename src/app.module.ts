@@ -13,6 +13,7 @@ import { HttpFoundationModule } from './common/http-foundation.module';
 import { getDatabaseConfig } from './config/database.config';
 import { validateEnvironment } from './config/environment.validation';
 import { NotificationsModule } from './notifications/notifications.module';
+import { ReviewsModule } from './reviews/reviews.module';
 import { ToursModule } from './tours/tours.module';
 import { UsersModule } from './users/users.module';
 
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module';
     BookingsModule,
     CategoriesModule,
     NotificationsModule,
+    ReviewsModule,
     ToursModule,
     UsersModule,
   ],
