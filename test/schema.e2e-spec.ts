@@ -18,10 +18,12 @@ describe('Migrated schema integration', () => {
   beforeAll(async () => {
     if (
       process.env.NODE_ENV !== 'test' ||
-      !/^booking_tour_f00_[a-z0-9_]+_test$/.test(process.env.DB_TEST_NAME ?? '')
+      !/^(?:booking_tour_f00_[a-z0-9_]+_test|booking_tour_ci_test)$/.test(
+        process.env.DB_TEST_NAME ?? '',
+      )
     ) {
       throw new Error(
-        'Schema tests require a disposable booking_tour_f00_*_test database',
+        'Schema tests require booking_tour_ci_test or a disposable booking_tour_f00_*_test database',
       );
     }
     source = await new DataSource(getDatabaseOptions()).initialize();

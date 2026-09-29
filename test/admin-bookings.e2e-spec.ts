@@ -63,10 +63,12 @@ describe('Admin bookings (e2e)', () => {
 
   beforeEach(async () => {
     if (
-      !/^booking_tour_f00_[a-z0-9_]+_test$/.test(process.env.DB_TEST_NAME ?? '')
+      !/^(?:booking_tour_f00_[a-z0-9_]+_test|booking_tour_ci_test)$/.test(
+        process.env.DB_TEST_NAME ?? '',
+      )
     ) {
       throw new Error(
-        'E2E requires a disposable booking_tour_f00_*_test database',
+        'E2E requires booking_tour_ci_test or a disposable booking_tour_f00_*_test database',
       );
     }
     mailSendMock = jest.fn<Promise<void>, [MailMessage]>();
