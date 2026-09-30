@@ -5,19 +5,29 @@ import { extname, join, resolve } from 'node:path';
 import { fileStorageConfig } from '../config/file-storage.config';
 import {
   FILE_NOT_FOUND_CODE,
+  FILE_STORAGE_ERROR_KEYS,
+  FILE_STORAGE_LOG_EVENTS,
+  FILE_WRITE_FLAG_NO_OVERWRITE,
+  IMAGE_FILE_SIGNATURES,
+  IMAGE_FILENAME_FORBIDDEN_CHARACTERS,
+  IMAGE_MIME_TYPE_BY_EXTENSION,
+  IMAGE_SIGNATURE_START_OFFSET,
+  EXPECTED_IMAGE_STORAGE_KEY_SEGMENT_COUNT,
+  IMAGE_STORAGE_KEY_SEPARATOR,
+  MANAGED_IMAGE_NAME_PATTERN,
   MAX_IMAGE_SIZE_BYTES,
   MAX_IMAGE_ORIGINAL_NAME_LENGTH,
+  MINIMUM_IMAGE_SIZE_BYTES,
   TOUR_IMAGE_MIME_TYPES,
   UPLOAD_DIRECTORY_NAME,
   UPLOAD_URL_PREFIX,
+  UNKNOWN_ERROR_NAME,
+  WEBP_FORMAT_SIGNATURE_OFFSET,
 } from './constants/file.constants';
 import type { StoredImage } from './interfaces/stored-image.interface';
 import type { UploadedImage } from './interfaces/uploaded-image.interface';
 
 export type ImageFolder = keyof typeof fileStorageConfig.folders;
-
-const MANAGED_IMAGE_NAME_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpe?g|png|webp)$/;
 
 export function getUploadRoot(): string {
   return resolve(process.cwd(), UPLOAD_DIRECTORY_NAME);
@@ -33,10 +43,10 @@ export class FileStorageService {
     maxCount: number,
   ): Promise<StoredImage[]> {
     if (!Object.hasOwn(fileStorageConfig.folders, folder)) {
-      throw new BadRequestException('errors.imageKeyInvalid');
+      throw new BadRequestException(FILE_STORAGE_ERROR_KEYS.invalidImageKey);
     }
     if (files.length > maxCount) {
-      throw new BadRequestException('errors.imageCountExceeded');
+      throw new BadRequestException(FILE_STORAGE_ERROR_KEYS.tooManyImages);
     }
 
     const validated = files.map((file) => this.validate(file));
@@ -47,17 +57,18 @@ export class FileStorageService {
       await mkdir(join(getUploadRoot(), folder), { recursive: true });
 
       for (const image of validated) {
-        const storageKey = `${folder}/${randomUUID()}${image.extension}`;
+        const fileName = `${randomUUID()}${image.extension}`;
+        const storageKey = [folder, fileName].join(IMAGE_STORAGE_KEY_SEPARATOR);
         attemptedKeys.push(storageKey);
         await writeFile(join(getUploadRoot(), storageKey), image.file.buffer, {
-          flag: 'wx',
+          flag: FILE_WRITE_FLAG_NO_OVERWRITE,
         });
         stored.push({
           mimeType: image.file.mimetype,
           originalName: image.file.originalname,
           sizeBytes: image.file.size,
           storageKey,
-          url: `${fileStorageConfig.folders[folder].urlPrefix}${storageKey.slice(folder.length + 1)}`,
+          url: `${fileStorageConfig.folders[folder].urlPrefix}${fileName}`,
         });
       }
 
@@ -87,8 +98,8 @@ export class FileStorageService {
       } catch (error: unknown) {
         this.logger.warn(
           JSON.stringify({
-            event: 'image_cleanup_failed',
-            errorName: error instanceof Error ? error.name : 'UnknownError',
+            event: FILE_STORAGE_LOG_EVENTS.cleanupFailed,
+            errorName: error instanceof Error ? error.name : UNKNOWN_ERROR_NAME,
           }),
         );
       }
@@ -106,16 +117,16 @@ export class FileStorageService {
 
   getPath(storageKey: string): string {
     if (!this.isManagedKey(storageKey)) {
-      throw new BadRequestException('errors.imageKeyInvalid');
+      throw new BadRequestException(FILE_STORAGE_ERROR_KEYS.invalidImageKey);
     }
 
     return join(getUploadRoot(), storageKey);
   }
 
   private isManagedKey(storageKey: string): boolean {
-    const segments = storageKey.split('/');
+    const segments = storageKey.split(IMAGE_STORAGE_KEY_SEPARATOR);
     return (
-      segments.length === 2 &&
+      segments.length === EXPECTED_IMAGE_STORAGE_KEY_SEGMENT_COUNT &&
       Object.hasOwn(fileStorageConfig.folders, segments[0]) &&
       MANAGED_IMAGE_NAME_PATTERN.test(segments[1])
     );
@@ -128,38 +139,31 @@ export class FileStorageService {
     if (
       !Buffer.isBuffer(file.buffer) ||
       file.size !== file.buffer.length ||
-      file.size === 0 ||
+      file.size < MINIMUM_IMAGE_SIZE_BYTES ||
       file.size > MAX_IMAGE_SIZE_BYTES
     ) {
-      throw new BadRequestException('errors.imageInvalid');
+      throw new BadRequestException(FILE_STORAGE_ERROR_KEYS.invalidImage);
     }
 
     if (
       !file.originalname ||
       file.originalname.length > MAX_IMAGE_ORIGINAL_NAME_LENGTH ||
-      file.originalname.includes('/') ||
-      file.originalname.includes('\\') ||
-      file.originalname.includes('\0')
+      IMAGE_FILENAME_FORBIDDEN_CHARACTERS.some((character) =>
+        file.originalname.includes(character),
+      )
     ) {
-      throw new BadRequestException('errors.imageInvalid');
+      throw new BadRequestException(FILE_STORAGE_ERROR_KEYS.invalidImage);
     }
 
     const extension = extname(file.originalname).toLowerCase();
-    const expectedMimeType =
-      extension === '.jpg' || extension === '.jpeg'
-        ? TOUR_IMAGE_MIME_TYPES.jpeg
-        : extension === '.png'
-          ? TOUR_IMAGE_MIME_TYPES.png
-          : extension === '.webp'
-            ? TOUR_IMAGE_MIME_TYPES.webp
-            : null;
+    const expectedMimeType = IMAGE_MIME_TYPE_BY_EXTENSION[extension] ?? null;
 
     if (
       !expectedMimeType ||
       file.mimetype !== expectedMimeType ||
       !this.matchesSignature(file.buffer, expectedMimeType)
     ) {
-      throw new BadRequestException('errors.imageInvalid');
+      throw new BadRequestException(FILE_STORAGE_ERROR_KEYS.invalidImage);
     }
 
     return { extension, file };
@@ -167,29 +171,45 @@ export class FileStorageService {
 
   private matchesSignature(buffer: Buffer, mimeType: string): boolean {
     if (mimeType === TOUR_IMAGE_MIME_TYPES.jpeg) {
-      return (
-        buffer.length >= 3 &&
-        buffer[0] === 0xff &&
-        buffer[1] === 0xd8 &&
-        buffer[2] === 0xff
-      );
+      return this.startsWithSignature(buffer, IMAGE_FILE_SIGNATURES.jpeg);
     }
     if (mimeType === TOUR_IMAGE_MIME_TYPES.png) {
-      return (
-        buffer.length >= 8 &&
-        buffer
-          .subarray(0, 8)
-          .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-      );
+      return this.startsWithSignature(buffer, IMAGE_FILE_SIGNATURES.png);
     }
     if (mimeType === TOUR_IMAGE_MIME_TYPES.webp) {
       return (
-        buffer.length >= 12 &&
-        buffer.toString('ascii', 0, 4) === 'RIFF' &&
-        buffer.toString('ascii', 8, 12) === 'WEBP'
+        buffer.length >=
+          WEBP_FORMAT_SIGNATURE_OFFSET +
+            IMAGE_FILE_SIGNATURES.webpFormat.length &&
+        buffer.toString(
+          'ascii',
+          IMAGE_SIGNATURE_START_OFFSET,
+          IMAGE_FILE_SIGNATURES.webpRiff.length,
+        ) === IMAGE_FILE_SIGNATURES.webpRiff &&
+        buffer.toString(
+          'ascii',
+          WEBP_FORMAT_SIGNATURE_OFFSET,
+          WEBP_FORMAT_SIGNATURE_OFFSET +
+            IMAGE_FILE_SIGNATURES.webpFormat.length,
+        ) === IMAGE_FILE_SIGNATURES.webpFormat
       );
     }
 
     return false;
+  }
+
+  private startsWithSignature(
+    buffer: Buffer,
+    signature: readonly number[],
+  ): boolean {
+    return (
+      buffer.length >= signature.length &&
+      buffer
+        .subarray(
+          IMAGE_SIGNATURE_START_OFFSET,
+          IMAGE_SIGNATURE_START_OFFSET + signature.length,
+        )
+        .equals(Buffer.from(signature))
+    );
   }
 }

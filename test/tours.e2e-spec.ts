@@ -5,6 +5,15 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import type { Repository } from 'typeorm';
+import { access, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { static as serveStatic } from 'express';
+import {
+  FileStorageService,
+  getUploadRoot,
+} from '../src/files/file-storage.service';
+import { MAX_TOUR_IMAGE_COUNT } from '../src/tours/constants/tour.constants';
+import { TourImageEntity } from '../src/files/entities/tour-image.entity';
 import { AppModule } from '../src/app.module';
 import { CategoryStatus } from '../src/categories/constants/category.constants';
 import { CategoryEntity } from '../src/categories/entities/category.entity';
@@ -20,6 +29,8 @@ describe('Tours (e2e)', () => {
     id: string;
     slug: string;
     status: TourStatus;
+    title: string;
+    images: { id: string; url: string; sortOrder: number }[];
   }
 
   let app: INestApplication<App>;
@@ -27,6 +38,60 @@ describe('Tours (e2e)', () => {
   let departuresRepository: Repository<TourDepartureEntity>;
   let toursRepository: Repository<TourEntity>;
   let usersRepository: Repository<UserEntity>;
+  let imagesRepository: Repository<TourImageEntity>;
+  let originalFiles: Set<string>;
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1UAAAAASUVORK5CYII=',
+    'base64',
+  );
+
+  async function tourFiles(): Promise<string[]> {
+    try {
+      return await readdir(join(getUploadRoot(), 'tours'));
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  async function managementContext() {
+    const admin = await usersRepository.save(
+      usersRepository.create({
+        email: 'media-admin@example.com',
+        passwordHash: null,
+        role: UserRole.ADMIN,
+        status: UserStatus.ACTIVE,
+      }),
+    );
+    const category = await categoriesRepository.save(
+      categoriesRepository.create({
+        name: 'Media category',
+        slug: 'media-category',
+        status: CategoryStatus.ACTIVE,
+      }),
+    );
+    return {
+      categoryId: category.id,
+      token: app.get(JwtService).sign({ sub: admin.id }),
+    };
+  }
+
+  function createMultipartTour(
+    token: string,
+    categoryId: string,
+    code = 'MEDIA-TOUR',
+  ) {
+    return request(app.getHttpServer())
+      .post('/api/admin/tours')
+      .set('Authorization', `Bearer ${token}`)
+      .field('basePrice', '1500000')
+      .field('categoryId', categoryId)
+      .field('code', code)
+      .field('description', 'Tour with images')
+      .field('title', code);
+  }
 
   beforeEach(async () => {
     if (
@@ -44,6 +109,13 @@ describe('Tours (e2e)', () => {
 
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix(process.env.API_PREFIX ?? 'api');
+    app.use(
+      '/uploads/tours',
+      serveStatic(join(getUploadRoot(), 'tours'), {
+        dotfiles: 'deny',
+        index: false,
+      }),
+    );
     app.useGlobalPipes(
       new ValidationPipe({
         forbidNonWhitelisted: true,
@@ -64,6 +136,10 @@ describe('Tours (e2e)', () => {
     usersRepository = app.get<Repository<UserEntity>>(
       getRepositoryToken(UserEntity),
     );
+    imagesRepository = app.get<Repository<TourImageEntity>>(
+      getRepositoryToken(TourImageEntity),
+    );
+    originalFiles = new Set(await tourFiles());
     await departuresRepository.query(
       'TRUNCATE TABLE "tour_departures" RESTART IDENTITY CASCADE',
     );
@@ -80,6 +156,15 @@ describe('Tours (e2e)', () => {
 
   afterEach(async () => {
     if (app) {
+      if (originalFiles) {
+        await app
+          .get(FileStorageService)
+          .removeBestEffort(
+            (await tourFiles())
+              .filter((file) => !originalFiles.has(file))
+              .map((file) => `tours/${file}`),
+          );
+      }
       await app.close();
     }
   });
@@ -361,5 +446,216 @@ describe('Tours (e2e)', () => {
         departureTo: range.departureTo,
       })
       .expect(400);
+  });
+
+  it('creates and updates a multipart tour with images in the same request', async () => {
+    const { categoryId, token } = await managementContext();
+    const created = await createMultipartTour(token, categoryId)
+      .attach('images', png, {
+        filename: 'first.png',
+        contentType: 'image/png',
+      })
+      .attach('images', png, {
+        filename: 'second.png',
+        contentType: 'image/png',
+      })
+      .expect(201);
+    const tour = created.body as TourResponseBody;
+    expect(tour.images).toHaveLength(2);
+    expect(tour.images.map((image) => image.sortOrder)).toEqual([0, 1]);
+    const originalImage = tour.images[0];
+    const originalKey = app.get(FileStorageService).toKey(originalImage.url)!;
+    await expect(
+      access(app.get(FileStorageService).getPath(originalKey)),
+    ).resolves.toBeUndefined();
+    await request(app.getHttpServer())
+      .get(originalImage.url)
+      .expect(200)
+      .expect('Content-Type', /image\/png/);
+
+    const updated = await request(app.getHttpServer())
+      .patch(`/api/admin/tours/${tour.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .field('title', 'Updated media tour')
+      .field('status', TourStatus.PUBLISHED)
+      .field('removeImageIds', JSON.stringify([originalImage.id]))
+      .attach('images', png, {
+        filename: 'replacement.png',
+        contentType: 'image/png',
+      })
+      .expect(200);
+    const updatedTour = updated.body as TourResponseBody;
+    expect(updatedTour.title).toBe('Updated media tour');
+    expect(updatedTour.images).toHaveLength(2);
+    expect(updatedTour.images.map((image) => image.id)).toContain(
+      tour.images[1].id,
+    );
+    expect(updatedTour.images.map((image) => image.id)).not.toContain(
+      originalImage.id,
+    );
+    await expect(
+      access(app.get(FileStorageService).getPath(originalKey)),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await request(app.getHttpServer())
+      .get(`/api/tours/${tour.id}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect((body as TourResponseBody).images).toEqual(updatedTour.images);
+      });
+
+    await request(app.getHttpServer())
+      .patch(`/api/admin/tours/${tour.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ description: 'Text-only update' })
+      .expect(200)
+      .expect(({ body }) => {
+        expect((body as TourResponseBody).images).toEqual(updatedTour.images);
+      });
+  });
+
+  it('rejects invalid image content, excessive uploads and invalid form data without creating a tour', async () => {
+    const { categoryId, token } = await managementContext();
+    await createMultipartTour(token, categoryId)
+      .attach('images', Buffer.from('not an image'), {
+        filename: 'fake.png',
+        contentType: 'image/png',
+      })
+      .expect(400);
+    let excessiveRequest = createMultipartTour(token, categoryId);
+    for (let index = 0; index <= MAX_TOUR_IMAGE_COUNT; index++) {
+      excessiveRequest = excessiveRequest.attach('images', png, {
+        filename: `image-${index}.png`,
+        contentType: 'image/png',
+      });
+    }
+    await excessiveRequest.expect(400);
+    await createMultipartTour(token, categoryId)
+      .field('unknownField', 'invalid')
+      .attach('images', png, {
+        filename: 'image.png',
+        contentType: 'image/png',
+      })
+      .expect(400);
+    expect(await toursRepository.count()).toBe(0);
+    expect(await imagesRepository.count()).toBe(0);
+    expect(new Set(await tourFiles())).toEqual(originalFiles);
+  });
+
+  it('rolls back new files after a duplicate create and retains images on failed updates', async () => {
+    const { categoryId, token } = await managementContext();
+    const created = await createMultipartTour(token, categoryId)
+      .attach('images', png, {
+        filename: 'original.png',
+        contentType: 'image/png',
+      })
+      .expect(201);
+    const tour = created.body as TourResponseBody;
+    const filesBeforeFailure = new Set(await tourFiles());
+
+    await createMultipartTour(token, categoryId)
+      .attach('images', png, {
+        filename: 'duplicate.png',
+        contentType: 'image/png',
+      })
+      .expect(409);
+    expect(await toursRepository.count()).toBe(1);
+    expect(await imagesRepository.count()).toBe(1);
+    expect(new Set(await tourFiles())).toEqual(filesBeforeFailure);
+
+    await request(app.getHttpServer())
+      .patch(`/api/admin/tours/${tour.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .field('title', 'Must not save')
+      .field('removeImageIds', tour.images[0].id)
+      .attach('images', Buffer.from('invalid'), {
+        filename: 'invalid.png',
+        contentType: 'image/png',
+      })
+      .expect(400);
+    await request(app.getHttpServer())
+      .patch(`/api/admin/tours/${tour.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .field('removeImageIds', '00000000-0000-4000-8000-000000000000')
+      .attach('images', png, {
+        filename: 'valid.png',
+        contentType: 'image/png',
+      })
+      .expect(400);
+    await request(app.getHttpServer())
+      .get(`/api/admin/tours/${tour.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({ title: tour.title, images: tour.images });
+      });
+    expect(new Set(await tourFiles())).toEqual(filesBeforeFailure);
+  });
+
+  it('enforces the total image limit when appending and permits removal plus replacement', async () => {
+    const { categoryId, token } = await managementContext();
+    let creation = createMultipartTour(token, categoryId);
+    for (let index = 0; index < MAX_TOUR_IMAGE_COUNT; index++) {
+      creation = creation.attach('images', png, {
+        filename: `image-${index}.png`,
+        contentType: 'image/png',
+      });
+    }
+    const response = await creation.expect(201);
+    const tour = response.body as TourResponseBody;
+    expect(tour.images).toHaveLength(MAX_TOUR_IMAGE_COUNT);
+    const filesBeforeFailure = new Set(await tourFiles());
+    await request(app.getHttpServer())
+      .patch(`/api/admin/tours/${tour.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .attach('images', png, {
+        filename: 'extra.png',
+        contentType: 'image/png',
+      })
+      .expect(400);
+    expect(new Set(await tourFiles())).toEqual(filesBeforeFailure);
+    await request(app.getHttpServer())
+      .patch(`/api/admin/tours/${tour.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .field('removeImageIds', tour.images[0].id)
+      .attach('images', png, {
+        filename: 'replacement.png',
+        contentType: 'image/png',
+      })
+      .expect(200)
+      .expect(({ body }) => {
+        expect((body as TourResponseBody).images).toHaveLength(
+          MAX_TOUR_IMAGE_COUNT,
+        );
+      });
+  });
+
+  it('rejects anonymous and non-admin multipart uploads before file persistence', async () => {
+    const { categoryId } = await managementContext();
+    const user = await usersRepository.save(
+      usersRepository.create({
+        email: 'media-user@example.com',
+        passwordHash: null,
+        role: UserRole.USER,
+        status: UserStatus.ACTIVE,
+      }),
+    );
+    await request(app.getHttpServer())
+      .post('/api/admin/tours')
+      .attach('images', png, {
+        filename: 'unauthorized.png',
+        contentType: 'image/png',
+      })
+      .expect(401);
+    await createMultipartTour(
+      app.get(JwtService).sign({ sub: user.id }),
+      categoryId,
+    )
+      .attach('images', png, {
+        filename: 'forbidden.png',
+        contentType: 'image/png',
+      })
+      .expect(403);
+    expect(await toursRepository.count()).toBe(0);
+    expect(new Set(await tourFiles())).toEqual(originalFiles);
   });
 });

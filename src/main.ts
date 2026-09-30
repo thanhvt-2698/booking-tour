@@ -7,6 +7,10 @@ import {
   DEFAULT_API_PREFIX,
   DEFAULT_PORT,
 } from './common/constants/app.constants';
+import {
+  CONTENT_TYPE_OPTIONS_HEADER,
+  CONTENT_TYPE_OPTIONS_NOSNIFF_VALUE,
+} from './common/constants/security.constants';
 import { getUploadRoot } from './files/file-storage.service';
 import { fileStorageConfig } from './config/file-storage.config';
 
@@ -20,10 +24,12 @@ async function bootstrap() {
     app.use(
       config.urlPrefix,
       serveStatic(join(getUploadRoot(), folder), {
-        dotfiles: 'deny',
-        index: false,
+        ...fileStorageConfig.publicServingOptions,
         setHeaders: (response) => {
-          response.setHeader('X-Content-Type-Options', 'nosniff');
+          response.setHeader(
+            CONTENT_TYPE_OPTIONS_HEADER,
+            CONTENT_TYPE_OPTIONS_NOSNIFF_VALUE,
+          );
         },
       }),
     );
