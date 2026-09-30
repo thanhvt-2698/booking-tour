@@ -44,6 +44,8 @@
   "reviewBodyRequired": "Review body is required",
   "reviewAlreadyExists": "You have already reviewed this tour",
   "reviewNotEligible": "Only a completed tour with an approved booking can be reviewed",
+  "reviewNotFound": "Review does not exist",
+  "reviewUpdateRequired": "Provide a rating or review body to update",
   "bookingCreatedDateRangeInvalid": "createdFrom must be earlier than or equal to createdTo",
   "cannotChangeOwnAdminRole": "You cannot remove your own admin role",
   "cannotBlockOwnAccount": "You cannot block your own account",
