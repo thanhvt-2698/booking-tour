@@ -58,5 +58,8 @@
   "notFound": "Resource not found",
   "conflict": "Resource conflict",
   "rateLimit": "Too many requests",
-  "internal": "Internal server error"
+  "internal": "Internal server error",
+  "imageInvalid": "Upload a nonempty JPEG, PNG, or WebP image up to 5 MB",
+  "imageCountExceeded": "Too many images were uploaded",
+  "imageKeyInvalid": "Image storage key is invalid"
 }

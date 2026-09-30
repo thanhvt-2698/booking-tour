@@ -1,16 +1,33 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { static as serveStatic } from 'express';
+import { join } from 'node:path';
 import { AppModule } from './app.module';
 import {
   DEFAULT_API_PREFIX,
   DEFAULT_PORT,
 } from './common/constants/app.constants';
+import { getUploadRoot } from './files/file-storage.service';
+import { fileStorageConfig } from './config/file-storage.config';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const apiPrefix = process.env.API_PREFIX ?? DEFAULT_API_PREFIX;
 
   app.setGlobalPrefix(apiPrefix);
+  for (const [folder, config] of Object.entries(fileStorageConfig.folders)) {
+    if (!config.isPublic) continue;
+    app.use(
+      config.urlPrefix,
+      serveStatic(join(getUploadRoot(), folder), {
+        dotfiles: 'deny',
+        index: false,
+        setHeaders: (response) => {
+          response.setHeader('X-Content-Type-Options', 'nosniff');
+        },
+      }),
+    );
+  }
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Booking Tour API')
