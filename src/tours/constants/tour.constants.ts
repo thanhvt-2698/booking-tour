@@ -25,3 +25,14 @@ export const TOUR_PUBLIC_FIELDS = [
 export const TOUR_QUERY_FIELDS = TOUR_PUBLIC_FIELDS.map(
   (field) => `tour.${field}`,
 );
+
+export const TOUR_IMAGE_PUBLIC_FIELDS = [
+  'id',
+  'tourId',
+  'url',
+  'sortOrder',
+] as const;
+export const TOUR_IMAGE_MANAGEMENT_FIELDS = [
+  ...TOUR_IMAGE_PUBLIC_FIELDS,
+  'storageKey',
+] as const;

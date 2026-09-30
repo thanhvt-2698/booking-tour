@@ -43,16 +43,16 @@ describe('Migrated schema integration', () => {
     if (source?.isInitialized) await source.destroy();
   });
 
-  it('has exactly the expected domain tables and 13 foreign keys without duplicate columns', async () => {
-    expect(source.entityMetadatas).toHaveLength(10);
+  it('has the expected domain tables and foreign keys without duplicate columns', async () => {
+    expect(source.entityMetadatas).toHaveLength(11);
     expect(source.entityMetadatas.flatMap((m) => m.foreignKeys)).toHaveLength(
-      13,
+      14,
     );
     const tables = await runner.getTables(
       source.entityMetadatas.map((m) => m.tableName),
     );
-    expect(tables).toHaveLength(10);
-    expect(tables.flatMap((t) => t.foreignKeys)).toHaveLength(13);
+    expect(tables).toHaveLength(11);
+    expect(tables.flatMap((t) => t.foreignKeys)).toHaveLength(14);
     for (const metadata of source.entityMetadatas) {
       const table = tables.find((t) => t.name === metadata.tableName)!;
       expect(table.columns.map((c) => c.name).sort()).toEqual(

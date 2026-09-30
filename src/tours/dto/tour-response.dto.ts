@@ -2,7 +2,20 @@ import { ApiProperty } from '@nestjs/swagger';
 import type { PaginationMeta } from '../../common/dto/pagination-response.dto';
 import { TourStatus } from '../constants/tour.constants';
 
+export class TourImageResponseDto {
+  @ApiProperty({ format: 'uuid' })
+  id!: string;
+
+  @ApiProperty()
+  url!: string;
+
+  @ApiProperty()
+  sortOrder!: number;
+}
+
 export class TourResponseDto {
+  @ApiProperty({ type: TourImageResponseDto, isArray: true })
+  images!: TourImageResponseDto[];
   @ApiProperty()
   basePrice!: string;
 

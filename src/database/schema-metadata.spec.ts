@@ -6,6 +6,7 @@ import { BookingStatusHistoryEntity } from '../bookings/entities/booking-status-
 import { BookingEntity } from '../bookings/entities/booking.entity';
 import { CategoryEntity } from '../categories/entities/category.entity';
 import { TourImageEntity } from '../files/entities/tour-image.entity';
+import { ReviewImageEntity } from '../reviews/entities/review-image.entity';
 import { ReviewEntity } from '../reviews/entities/review.entity';
 import { TourDepartureEntity } from '../tours/entities/tour-departure.entity';
 import { TourEntity } from '../tours/entities/tour.entity';
@@ -30,6 +31,7 @@ const schemaEntities = [
   BookingEntity,
   BookingStatusHistoryEntity,
   ReviewEntity,
+  ReviewImageEntity,
 ];
 
 const metadataFor = (
@@ -81,7 +83,7 @@ describe('schema metadata', () => {
     }
   });
 
-  it('registers exactly the ten F00 tables', () => {
+  it('registers the domain tables', () => {
     expect(
       dataSource.entityMetadatas.map(({ tableName }) => tableName).sort(),
     ).toEqual([
@@ -89,6 +91,7 @@ describe('schema metadata', () => {
       'bookings',
       'categories',
       'refresh_tokens',
+      'review_images',
       'reviews',
       'social_accounts',
       'tour_departures',
@@ -189,6 +192,14 @@ describe('schema metadata', () => {
         'RESTRICT',
         'FK_reviews_booking',
         'reviews',
+      ],
+      [
+        'review_images',
+        'review',
+        'review_id',
+        'CASCADE',
+        'FK_review_images_review',
+        'images',
       ],
     ] as const;
 
@@ -339,6 +350,13 @@ describe('schema metadata', () => {
       [
         'reviews',
         ['IDX_reviews_user_tour_unique', 'IDX_reviews_tour_status_created'],
+      ],
+      [
+        'review_images',
+        [
+          'IDX_review_images_review_sort',
+          'IDX_review_images_storage_key_unique',
+        ],
       ],
       [
         'social_accounts',

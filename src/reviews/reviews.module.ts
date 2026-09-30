@@ -1,19 +1,27 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TourEntity } from '../tours/entities/tour.entity';
+import { FilesModule } from '../files/files.module';
 import { AdminReviewsController } from './admin-reviews.controller';
 import { ReviewEntity } from './entities/review.entity';
+import { ReviewImageEntity } from './entities/review-image.entity';
 import { PublicReviewsController } from './public-reviews.controller';
 import { ReviewsController } from './reviews.controller';
 import { ReviewsService } from './reviews.service';
+import { ReviewImagesController } from './review-images.controller';
+import { ReviewImagesService } from './review-images.service';
 
 @Module({
   controllers: [
     PublicReviewsController,
     ReviewsController,
     AdminReviewsController,
+    ReviewImagesController,
   ],
-  imports: [TypeOrmModule.forFeature([ReviewEntity, TourEntity])],
-  providers: [ReviewsService],
+  imports: [
+    FilesModule,
+    TypeOrmModule.forFeature([ReviewEntity, ReviewImageEntity, TourEntity]),
+  ],
+  providers: [ReviewsService, ReviewImagesService],
 })
 export class ReviewsModule {}

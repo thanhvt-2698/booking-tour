@@ -15,6 +15,7 @@
   "tourTitleRequired": "Tên tour là bắt buộc",
   "tourDescriptionRequired": "Mô tả tour là bắt buộc",
   "tourCurrencyInvalid": "Đơn vị tiền tệ của tour phải gồm ba chữ cái",
+  "tourImageInvalid": "Một hoặc nhiều ảnh không thuộc tour này",
   "departureNotFound": "Lịch khởi hành không tồn tại",
   "departureTourArchived": "Không thể thêm lịch khởi hành cho tour đã lưu trữ",
   "departureEndMustFollowStart": "Thời gian kết thúc phải sau thời gian bắt đầu",
@@ -45,7 +46,12 @@
   "reviewAlreadyExists": "Bạn đã đánh giá tour này",
   "reviewNotEligible": "Chỉ có thể đánh giá tour đã kết thúc với booking được duyệt",
   "reviewNotFound": "Đánh giá không tồn tại",
-  "reviewUpdateRequired": "Cần cung cấp điểm hoặc nội dung đánh giá để cập nhật",
+  "reviewUpdateRequired": "Cần cung cấp điểm, nội dung hoặc thay đổi ảnh để cập nhật",
+  "reviewImageInvalid": "Một hoặc nhiều ảnh không thuộc đánh giá này",
+  "imageInvalid": "Hãy tải ảnh JPEG, PNG hoặc WebP không rỗng, tối đa 5 MB",
+  "imageCountExceeded": "Số lượng ảnh tải lên vượt giới hạn",
+  "imageKeyInvalid": "Mã lưu trữ ảnh không hợp lệ",
+  "avatarFileAndUrlConflict": "Chỉ cung cấp tệp avatar hoặc URL avatar, không dùng cả hai",
   "bookingCreatedDateRangeInvalid": "createdFrom phải trước hoặc bằng createdTo",
   "cannotChangeOwnAdminRole": "Bạn không thể tự xóa quyền quản trị của mình",
   "cannotBlockOwnAccount": "Bạn không thể tự khóa tài khoản của mình",
@@ -58,5 +64,6 @@
   "notFound": "Không tìm thấy dữ liệu",
   "conflict": "Dữ liệu bị trùng hoặc xung đột",
   "rateLimit": "Quá nhiều yêu cầu",
-  "internal": "Lỗi hệ thống"
+  "internal": "Lỗi hệ thống",
+  "reviewImageNotFound": "Không tìm thấy ảnh của đánh giá đã công khai"
 }

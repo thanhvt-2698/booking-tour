@@ -1,13 +1,29 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Patch,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import {
   ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import {
+  MAX_AVATAR_IMAGE_COUNT,
+  MAX_IMAGE_SIZE_BYTES,
+} from '../files/constants/file.constants';
+import type { UploadedImage } from '../files/interfaces/uploaded-image.interface';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 import { UserEntity } from './entities/user.entity';
@@ -32,11 +48,31 @@ export class UsersController {
 
   @Patch('me')
   @ApiOperation({ summary: 'Update the authenticated user profile' })
+  @ApiConsumes('application/json', 'multipart/form-data')
+  @ApiBody({
+    schema: {
+      properties: {
+        avatar: { format: 'binary', type: 'string' },
+        avatarUrl: { format: 'uri', type: 'string', nullable: true },
+        bio: { maxLength: 500, type: 'string', nullable: true },
+      },
+      type: 'object',
+    },
+  })
   @ApiOkResponse({ type: UserResponseDto })
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      limits: {
+        fileSize: MAX_IMAGE_SIZE_BYTES,
+        files: MAX_AVATAR_IMAGE_COUNT,
+      },
+    }),
+  )
   updateCurrentUser(
     @CurrentUser() user: UserEntity,
     @Body() input: UpdateProfileDto,
+    @UploadedFile() avatar?: UploadedImage,
   ): Promise<UserResponseDto> {
-    return this.usersService.updateProfileResponse(user.id, input);
+    return this.usersService.updateProfileResponse(user.id, input, avatar);
   }
 }

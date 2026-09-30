@@ -43,3 +43,23 @@ export const REVIEW_INSERT_RETURNING_FIELDS = [
   'tourId',
   'updatedAt',
 ] as const;
+
+export const REVIEW_IMAGE_PUBLIC_QUERY_FIELDS = [
+  'id',
+  'reviewId',
+  'sortOrder',
+  'url',
+  'mimeType',
+  'originalName',
+  'sizeBytes',
+] as const;
+
+export const REVIEW_IMAGE_MANAGEMENT_QUERY_FIELDS = [
+  ...REVIEW_IMAGE_PUBLIC_QUERY_FIELDS,
+  'storageKey',
+] as const;
+
+export const REVIEW_IMAGE_DOWNLOAD_FIELDS = [
+  'image.id',
+  'image.mimeType',
+] as const;

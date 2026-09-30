@@ -4,6 +4,7 @@ import {
   REVIEW_RATING_MIN_VALUE,
   ReviewStatus,
 } from '../constants/review.constants';
+import { ReviewImageResponseDto } from './review-image-response.dto';
 
 export class ReviewResponseDto {
   @ApiProperty({ example: 'A helpful review of the tour.' })
@@ -14,6 +15,9 @@ export class ReviewResponseDto {
 
   @ApiProperty({ format: 'uuid' })
   id!: string;
+
+  @ApiProperty({ isArray: true, type: ReviewImageResponseDto })
+  images!: ReviewImageResponseDto[];
 
   @ApiProperty({
     example: 5,

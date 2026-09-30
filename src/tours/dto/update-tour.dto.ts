@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsEnum,
@@ -6,10 +6,13 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  IsArray,
+  ArrayMaxSize,
   Length,
   Min,
 } from 'class-validator';
 import { TourStatus } from '../constants/tour.constants';
+import { MAX_TOUR_IMAGE_COUNT } from '../../files/constants/file.constants';
 
 export class UpdateTourDto {
   @ApiPropertyOptional({ example: 1500000, minimum: 0, type: Number })
@@ -61,4 +64,30 @@ export class UpdateTourDto {
   @IsString()
   @Length(3, 3)
   currency?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'IDs of existing tour images to remove. Send repeated fields or a JSON array in multipart forms.',
+    isArray: true,
+    type: String,
+    format: 'uuid',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value === 'string') {
+      if (value.startsWith('[')) {
+        try {
+          return JSON.parse(value) as unknown;
+        } catch {
+          return value;
+        }
+      }
+      return [value];
+    }
+    return value;
+  })
+  @IsArray()
+  @ArrayMaxSize(MAX_TOUR_IMAGE_COUNT)
+  @IsUUID('4', { each: true })
+  removeImageIds?: string[];
 }
