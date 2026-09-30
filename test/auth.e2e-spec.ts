@@ -7,6 +7,8 @@ import type { Repository } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { UserEntity } from '../src/users/entities/user.entity';
 import { UserStatus } from '../src/users/constants/user.constants';
+import { readFile } from 'node:fs/promises';
+import { FileStorageService } from '../src/files/file-storage.service';
 
 interface AuthResponseBody {
   accessToken: string;
@@ -19,6 +21,12 @@ interface AuthResponseBody {
 describe('Authentication and current user (e2e)', () => {
   let app: INestApplication<App>;
   let usersRepository: Repository<UserEntity>;
+  let fileStorage: FileStorageService;
+  let avatarKeys: string[];
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jE1sAAAAASUVORK5CYII=',
+    'base64',
+  );
 
   beforeEach(async () => {
     if (
@@ -37,6 +45,8 @@ describe('Authentication and current user (e2e)', () => {
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix(process.env.API_PREFIX ?? 'api');
     await app.init();
+    fileStorage = app.get(FileStorageService);
+    avatarKeys = [];
 
     usersRepository = app.get<Repository<UserEntity>>(
       getRepositoryToken(UserEntity),
@@ -48,8 +58,90 @@ describe('Authentication and current user (e2e)', () => {
 
   afterEach(async () => {
     if (app) {
+      await fileStorage.removeBestEffort(avatarKeys);
       await app.close();
     }
+  });
+
+  it('registers and replaces one avatar with profile fields in the same request', async () => {
+    const registration = await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .field('email', 'avatar@example.com')
+      .field('password', 'Password12345!')
+      .attach('avatar', png, {
+        filename: 'avatar.png',
+        contentType: 'image/png',
+      })
+      .expect(201);
+    const pair = registration.body as AuthResponseBody;
+    const original = (registration.body as { user: { avatarUrl: string } }).user
+      .avatarUrl;
+    const originalKey = fileStorage.toKey(original)!;
+    avatarKeys.push(originalKey);
+    expect(await readFile(fileStorage.getPath(originalKey))).toEqual(png);
+
+    const updated = await request(app.getHttpServer())
+      .patch('/api/users/me')
+      .set('Authorization', `Bearer ${pair.accessToken}`)
+      .field('bio', 'New profile')
+      .attach('avatar', png, {
+        filename: 'replacement.png',
+        contentType: 'image/png',
+      })
+      .expect(200);
+    const updatedProfile = updated.body as { avatarUrl: string; bio: string };
+    const newKey = fileStorage.toKey(updatedProfile.avatarUrl)!;
+    avatarKeys.push(newKey);
+    expect(updatedProfile.bio).toBe('New profile');
+    expect(newKey).not.toBe(originalKey);
+    expect(await readFile(fileStorage.getPath(newKey))).toEqual(png);
+    await expect(
+      readFile(fileStorage.getPath(originalKey)),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+
+    await request(app.getHttpServer())
+      .patch('/api/users/me')
+      .set('Authorization', `Bearer ${pair.accessToken}`)
+      .send({ avatarUrl: null })
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({ avatarUrl: null });
+      });
+    await expect(readFile(fileStorage.getPath(newKey))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+  });
+
+  it('rejects invalid or multiple avatars and unauthorized profile uploads', async () => {
+    await request(app.getHttpServer())
+      .patch('/api/users/me')
+      .attach('avatar', png, {
+        filename: 'avatar.png',
+        contentType: 'image/png',
+      })
+      .expect(401);
+    await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .field('email', 'invalid-avatar@example.com')
+      .field('password', 'Password12345!')
+      .attach('avatar', Buffer.from('invalid'), {
+        filename: 'avatar.png',
+        contentType: 'image/png',
+      })
+      .expect(400);
+    expect(
+      await usersRepository.existsBy({ email: 'invalid-avatar@example.com' }),
+    ).toBe(false);
+    await request(app.getHttpServer())
+      .post('/api/auth/register')
+      .field('email', 'multiple-avatar@example.com')
+      .field('password', 'Password12345!')
+      .attach('avatar', png, { filename: 'one.png', contentType: 'image/png' })
+      .attach('avatar', png, { filename: 'two.png', contentType: 'image/png' })
+      .expect(400);
+    expect(
+      await usersRepository.existsBy({ email: 'multiple-avatar@example.com' }),
+    ).toBe(false);
   });
 
   it('registers, authenticates, updates profile and rotates refresh token', async () => {

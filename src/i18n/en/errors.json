@@ -62,5 +62,6 @@
   "imageInvalid": "Upload a nonempty JPEG, PNG, or WebP image up to 5 MB",
   "imageCountExceeded": "Too many images were uploaded",
   "imageKeyInvalid": "Image storage key is invalid",
-  "tourImageInvalid": "One or more tour images do not belong to this tour"
+  "tourImageInvalid": "One or more tour images do not belong to this tour",
+  "avatarFileAndUrlConflict": "Provide an avatar file or avatar URL, not both"
 }

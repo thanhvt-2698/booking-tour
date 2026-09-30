@@ -5,20 +5,28 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiBadRequestResponse,
+  ApiBody,
   ApiConflictResponse,
+  ApiConsumes,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { DEFAULT_RATE_LIMIT_WINDOW_MS } from '../common/constants/app.constants';
+import { MAX_IMAGE_SIZE_BYTES } from '../files/constants/file.constants';
+import type { UploadedImage } from '../files/interfaces/uploaded-image.interface';
+import { MAX_AVATAR_IMAGE_COUNT } from '../users/constants/user.constants';
 import { AuthService } from './auth.service';
 import { LOGIN_RATE_LIMIT } from './constants/auth.constants';
-import { DEFAULT_RATE_LIMIT_WINDOW_MS } from '../common/constants/app.constants';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -79,10 +87,33 @@ export class AuthController {
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
   @ApiOperation({ summary: 'Register a USER account and issue tokens' })
+  @ApiConsumes('application/json', 'multipart/form-data')
+  @ApiBody({
+    schema: {
+      properties: {
+        avatar: { format: 'binary', type: 'string' },
+        email: { format: 'email', maxLength: 254, type: 'string' },
+        password: { maxLength: 64, minLength: 12, type: 'string' },
+      },
+      required: ['email', 'password'],
+      type: 'object',
+    },
+  })
   @ApiCreatedResponse({ type: AuthResponseDto })
   @ApiBadRequestResponse({ description: 'Invalid request body' })
   @ApiConflictResponse({ description: 'Email is already in use' })
-  register(@Body() input: RegisterDto): Promise<AuthResponseDto> {
-    return this.authService.register(input);
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      limits: {
+        fileSize: MAX_IMAGE_SIZE_BYTES,
+        files: MAX_AVATAR_IMAGE_COUNT,
+      },
+    }),
+  )
+  register(
+    @Body() input: RegisterDto,
+    @UploadedFile() avatar?: UploadedImage,
+  ): Promise<AuthResponseDto> {
+    return this.authService.register(input, avatar);
   }
 }

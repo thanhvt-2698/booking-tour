@@ -62,5 +62,6 @@
   "imageInvalid": "Hãy tải ảnh JPEG, PNG hoặc WebP không rỗng, tối đa 5 MB",
   "imageCountExceeded": "Số lượng ảnh tải lên vượt giới hạn",
   "imageKeyInvalid": "Mã lưu trữ ảnh không hợp lệ",
-  "tourImageInvalid": "Một hoặc nhiều ảnh không thuộc tour này"
+  "tourImageInvalid": "Một hoặc nhiều ảnh không thuộc tour này",
+  "avatarFileAndUrlConflict": "Chỉ gửi file avatar hoặc URL avatar, không gửi cả hai"
 }
