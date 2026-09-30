@@ -9,7 +9,6 @@ export const REVIEW_BODY_MIN_LENGTH = 1;
 export const REVIEW_RATING_MAX_VALUE = 5;
 export const REVIEW_RATING_MIN_VALUE = 1;
 
-export const REVIEW_EXISTENCE_QUERY_FIELDS = ['id'] as const;
 export const REVIEW_TOUR_QUERY_FIELDS = ['id'] as const;
 export const REVIEW_ELIGIBLE_BOOKING_QUERY_FIELDS = ['booking.id'];
 export const REVIEW_INSERT_RETURNING_FIELDS = [
