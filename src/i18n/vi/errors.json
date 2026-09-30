@@ -44,6 +44,8 @@
   "reviewBodyRequired": "Nội dung đánh giá là bắt buộc",
   "reviewAlreadyExists": "Bạn đã đánh giá tour này",
   "reviewNotEligible": "Chỉ có thể đánh giá tour đã kết thúc với booking được duyệt",
+  "reviewNotFound": "Đánh giá không tồn tại",
+  "reviewUpdateRequired": "Cần cung cấp điểm hoặc nội dung đánh giá để cập nhật",
   "bookingCreatedDateRangeInvalid": "createdFrom phải trước hoặc bằng createdTo",
   "cannotChangeOwnAdminRole": "Bạn không thể tự xóa quyền quản trị của mình",
   "cannotBlockOwnAccount": "Bạn không thể tự khóa tài khoản của mình",
