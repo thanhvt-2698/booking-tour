@@ -35,13 +35,13 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../users/constants/user.constants';
 import { UserEntity } from '../users/entities/user.entity';
-import { MAX_IMAGE_SIZE_BYTES } from '../files/constants/file.constants';
-import type { UploadedImage } from '../files/interfaces/uploaded-image.interface';
 import {
-  MAX_TOUR_IMAGE_COUNT,
-  TOUR_IMAGE_REQUEST_CONTENT_TYPES,
-  TOUR_IMAGE_UPLOAD_FIELD_NAME,
-} from './constants/tour.constants';
+  IMAGE_UPLOAD_FIELD_NAME,
+  IMAGE_UPLOAD_REQUEST_CONTENT_TYPES,
+  MAX_IMAGE_SIZE_BYTES,
+} from '../files/constants/file.constants';
+import type { UploadedImage } from '../files/interfaces/uploaded-image.interface';
+import { MAX_TOUR_IMAGE_COUNT } from './constants/tour.constants';
 import { CreateTourDto } from './dto/create-tour.dto';
 import { CreateTourWithImagesDto } from './dto/create-tour-with-images.dto';
 import { TourQueryDto } from './dto/tour-query.dto';
@@ -67,10 +67,10 @@ export class AdminToursController {
   @ApiCreatedResponse({ type: TourResponseDto })
   @ApiBadRequestResponse({ description: 'Invalid tour data' })
   @ApiConflictResponse({ description: 'Tour code or slug already exists' })
-  @ApiConsumes(...TOUR_IMAGE_REQUEST_CONTENT_TYPES)
+  @ApiConsumes(...IMAGE_UPLOAD_REQUEST_CONTENT_TYPES)
   @ApiBody({ type: CreateTourWithImagesDto })
   @UseInterceptors(
-    FilesInterceptor(TOUR_IMAGE_UPLOAD_FIELD_NAME, MAX_TOUR_IMAGE_COUNT, {
+    FilesInterceptor(IMAGE_UPLOAD_FIELD_NAME, MAX_TOUR_IMAGE_COUNT, {
       limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
     }),
   )
@@ -110,10 +110,10 @@ export class AdminToursController {
   @ApiBadRequestResponse({ description: 'Invalid tour data or ID' })
   @ApiConflictResponse({ description: 'Tour code or slug already exists' })
   @ApiNotFoundResponse({ description: 'Tour does not exist' })
-  @ApiConsumes(...TOUR_IMAGE_REQUEST_CONTENT_TYPES)
+  @ApiConsumes(...IMAGE_UPLOAD_REQUEST_CONTENT_TYPES)
   @ApiBody({ type: UpdateTourWithImagesDto })
   @UseInterceptors(
-    FilesInterceptor(TOUR_IMAGE_UPLOAD_FIELD_NAME, MAX_TOUR_IMAGE_COUNT, {
+    FilesInterceptor(IMAGE_UPLOAD_FIELD_NAME, MAX_TOUR_IMAGE_COUNT, {
       limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
     }),
   )

@@ -11,6 +11,16 @@ import {
 import { ReviewQueryDto } from './dto/review-query.dto';
 import { ReviewEntity } from './entities/review.entity';
 import { ReviewsService } from './reviews.service';
+import type { FileStorageService } from '../files/file-storage.service';
+import { ReviewImageEntity } from './entities/review-image.entity';
+import { BookingEntity } from '../bookings/entities/booking.entity';
+import {
+  REVIEW_IMAGE_MANAGEMENT_QUERY_FIELDS,
+  REVIEW_IMAGE_PUBLIC_QUERY_FIELDS,
+  REVIEW_TOUR_QUERY_FIELDS,
+} from './constants/review.constants';
+import type { UploadedImage } from '../files/interfaces/uploaded-image.interface';
+import type { StoredImage } from '../files/interfaces/stored-image.interface';
 
 describe('ReviewsService', () => {
   let service: ReviewsService;
@@ -69,10 +79,28 @@ describe('ReviewsService', () => {
     const toursRepository = {
       existsBy: existsByMock,
     } as unknown as Repository<TourEntity>;
+    const reviewImagesRepository = {
+      find: jest.fn().mockResolvedValue([]),
+    } as unknown as Repository<ReviewImageEntity>;
+    const dataSource = {
+      transaction: jest.fn(
+        async (callback: (manager: unknown) => Promise<unknown>) =>
+          callback({
+            getRepository: (entity: unknown) =>
+              entity === ReviewEntity
+                ? reviewsRepository
+                : reviewImagesRepository,
+          }),
+      ),
+    } as unknown as DataSource;
     service = new ReviewsService(
-      {} as DataSource,
+      dataSource,
       reviewsRepository,
       toursRepository,
+      reviewImagesRepository,
+      {
+        removeBestEffort: jest.fn().mockResolvedValue(undefined),
+      } as unknown as FileStorageService,
     );
   });
 
@@ -88,6 +116,7 @@ describe('ReviewsService', () => {
           body: review.body,
           createdAt: review.createdAt,
           id: review.id,
+          images: [],
           rating: review.rating,
           status: review.status,
           tourId: review.tourId,
@@ -190,5 +219,279 @@ describe('ReviewsService', () => {
     await expect(
       service.moderate('review-id', { status: ReviewStatus.PUBLISHED }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+describe('ReviewsService image transactions', () => {
+  let service: ReviewsService;
+  let reviewRepository: Record<string, jest.Mock>;
+  let imageRepository: Record<string, jest.Mock>;
+  let tourRepository: Record<string, jest.Mock>;
+  let storage: Record<string, jest.Mock>;
+  let transaction: jest.Mock;
+  let insert: Record<string, jest.Mock>;
+  const review = {
+    body: 'Original',
+    createdAt: new Date('2026-01-01'),
+    id: 'review-id',
+    rating: 5,
+    status: ReviewStatus.HIDDEN,
+    tourId: 'tour-id',
+    updatedAt: new Date('2026-01-01'),
+  } as ReviewEntity;
+  const upload: UploadedImage = {
+    buffer: Buffer.from('image'),
+    mimetype: 'image/png',
+    originalname: 'photo.png',
+    size: 5,
+  };
+  const stored: StoredImage = {
+    mimeType: 'image/png',
+    originalName: 'photo.png',
+    sizeBytes: 5,
+    storageKey: 'reviews/new.png',
+    url: '/api/review-images/new.png',
+  };
+  const existingImage = {
+    ...stored,
+    id: 'old-image',
+    reviewId: 'review-id',
+    sortOrder: 0,
+    storageKey: 'reviews/old.png',
+  } as ReviewImageEntity;
+
+  beforeEach(() => {
+    insert = {
+      execute: jest.fn().mockResolvedValue({ generatedMaps: [review] }),
+      insert: jest.fn().mockReturnThis(),
+      into: jest.fn().mockReturnThis(),
+      orIgnore: jest.fn().mockReturnThis(),
+      returning: jest.fn().mockReturnThis(),
+      values: jest.fn().mockReturnThis(),
+    };
+    reviewRepository = {
+      create: jest.fn((input: unknown) => input),
+      createQueryBuilder: jest.fn().mockReturnValue(insert),
+      existsBy: jest.fn().mockResolvedValue(false),
+      findOne: jest.fn().mockResolvedValue(review),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+    };
+    imageRepository = {
+      create: jest.fn((input: unknown) => input),
+      delete: jest.fn().mockResolvedValue({ affected: 1 }),
+      find: jest.fn().mockResolvedValue([]),
+      save: jest.fn((images: Partial<ReviewImageEntity>[]) =>
+        Promise.resolve(images.map((image) => ({ ...image, id: 'new-image' }))),
+      ),
+    };
+    tourRepository = {
+      findOne: jest.fn().mockResolvedValue({ id: 'tour-id' }),
+    };
+    const bookingQuery = {
+      addOrderBy: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue({ id: 'booking-id' }),
+      innerJoin: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+    };
+    const manager = {
+      getRepository: (entity: unknown) => {
+        if (entity === ReviewEntity) return reviewRepository;
+        if (entity === ReviewImageEntity) return imageRepository;
+        if (entity === TourEntity) return tourRepository;
+        if (entity === BookingEntity)
+          return { createQueryBuilder: () => bookingQuery };
+        throw new Error('Unexpected test repository');
+      },
+    };
+    transaction = jest.fn((callback: (manager: unknown) => Promise<unknown>) =>
+      callback(manager),
+    );
+    storage = {
+      removeBestEffort: jest.fn().mockResolvedValue(undefined),
+      store: jest.fn().mockResolvedValue([stored]),
+    };
+    service = new ReviewsService(
+      { transaction } as unknown as DataSource,
+      reviewRepository as unknown as Repository<ReviewEntity>,
+      tourRepository as unknown as Repository<TourEntity>,
+      imageRepository as unknown as Repository<ReviewImageEntity>,
+      storage as unknown as FileStorageService,
+    );
+  });
+
+  it('creates a review and its image metadata in one transaction without exposing storage keys', async () => {
+    const response = await service.create(
+      'user-id',
+      'tour-id',
+      { body: '  Nice tour  ', rating: 5 },
+      [upload],
+    );
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(tourRepository.findOne).toHaveBeenCalledWith({
+      select: [...REVIEW_TOUR_QUERY_FIELDS],
+      where: { id: 'tour-id' },
+    });
+    expect(storage.store).toHaveBeenCalledWith([upload], 'reviews', 3);
+    expect(insert.values).toHaveBeenCalledWith(
+      expect.objectContaining({ body: 'Nice tour', bookingId: 'booking-id' }),
+    );
+    expect(imageRepository.save).toHaveBeenCalledWith([
+      { ...stored, reviewId: 'review-id', sortOrder: 0 },
+    ]);
+    expect(response.images).toEqual([
+      {
+        id: 'new-image',
+        mimeType: stored.mimeType,
+        originalName: stored.originalName,
+        sizeBytes: stored.sizeBytes,
+        sortOrder: 0,
+        url: stored.url,
+      },
+    ]);
+  });
+
+  it('rejects more than three incoming files before writing or starting a transaction', async () => {
+    await expect(
+      service.create('user-id', 'tour-id', { body: 'Nice', rating: 5 }, [
+        upload,
+        upload,
+        upload,
+        upload,
+      ]),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(transaction).not.toHaveBeenCalled();
+    expect(storage.store).not.toHaveBeenCalled();
+  });
+
+  it('removes newly stored files if the metadata insert fails', async () => {
+    const databaseError = new Error('Database write failed');
+    imageRepository.save.mockRejectedValue(databaseError);
+    await expect(
+      service.create('user-id', 'tour-id', { body: 'Nice', rating: 5 }, [
+        upload,
+      ]),
+    ).rejects.toBe(databaseError);
+    expect(storage.removeBestEffort).toHaveBeenCalledWith([stored.storageKey]);
+  });
+
+  it('locks the owned review, replaces images and removes old files only after commit', async () => {
+    imageRepository.find.mockResolvedValue([existingImage]);
+    transaction.mockImplementation(
+      async (callback: (manager: unknown) => Promise<unknown>) => {
+        const response = await callback({
+          getRepository: (entity: unknown) =>
+            entity === ReviewEntity ? reviewRepository : imageRepository,
+        });
+        expect(storage.removeBestEffort).not.toHaveBeenCalled();
+        return response;
+      },
+    );
+    const response = await service.updateOwn(
+      'user-id',
+      'tour-id',
+      'review-id',
+      { removeImageIds: ['old-image'] },
+      [upload],
+    );
+    expect(reviewRepository.findOne).toHaveBeenNthCalledWith(1, {
+      select: [...REVIEW_MANAGEMENT_QUERY_FIELDS],
+      where: {
+        id: 'review-id',
+        tourId: 'tour-id',
+        userId: 'user-id',
+        status: Not(ReviewStatus.DELETED),
+      },
+      lock: { mode: 'pessimistic_write' },
+    });
+    expect(imageRepository.find).toHaveBeenCalledWith({
+      select: [...REVIEW_IMAGE_MANAGEMENT_QUERY_FIELDS],
+      where: { reviewId: 'review-id' },
+      order: { sortOrder: 'ASC', id: 'ASC' },
+    });
+    expect(response).toMatchObject({ status: ReviewStatus.HIDDEN });
+    expect(response.images).toHaveLength(1);
+    expect(storage.removeBestEffort).toHaveBeenCalledWith(['reviews/old.png']);
+  });
+
+  it('rejects foreign image IDs, duplicate IDs and a total above three before storing', async () => {
+    imageRepository.find.mockResolvedValue([existingImage]);
+    await expect(
+      service.updateOwn('user-id', 'tour-id', 'review-id', {
+        removeImageIds: ['foreign-image'],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(
+      service.updateOwn('user-id', 'tour-id', 'review-id', {
+        removeImageIds: ['old-image', 'old-image'],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    imageRepository.find.mockResolvedValue([
+      existingImage,
+      { ...existingImage, id: 'second-image' },
+      { ...existingImage, id: 'third-image' },
+    ]);
+    await expect(
+      service.updateOwn('user-id', 'tour-id', 'review-id', {}, [upload]),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(storage.store).not.toHaveBeenCalled();
+    expect(imageRepository.delete).not.toHaveBeenCalled();
+  });
+
+  it('does not write a file when the review is not owned or is deleted', async () => {
+    reviewRepository.findOne.mockResolvedValue(null);
+    await expect(
+      service.updateOwn('other-user', 'tour-id', 'review-id', {}, [upload]),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    expect(storage.store).not.toHaveBeenCalled();
+  });
+
+  it('cleans up only new files if an image replacement transaction fails', async () => {
+    imageRepository.find.mockResolvedValue([existingImage]);
+    const databaseError = new Error('Metadata write failed');
+    imageRepository.save.mockRejectedValue(databaseError);
+    await expect(
+      service.updateOwn(
+        'user-id',
+        'tour-id',
+        'review-id',
+        { removeImageIds: ['old-image'] },
+        [upload],
+      ),
+    ).rejects.toBe(databaseError);
+    expect(storage.removeBestEffort).toHaveBeenCalledWith([stored.storageKey]);
+    expect(storage.removeBestEffort).not.toHaveBeenCalledWith([
+      'reviews/old.png',
+    ]);
+  });
+
+  it('keeps existing images in text updates and reads only public image fields', async () => {
+    imageRepository.find.mockResolvedValue([existingImage]);
+    const response = await service.updateOwn(
+      'user-id',
+      'tour-id',
+      'review-id',
+      { body: 'Updated' },
+    );
+    expect(response.images).toHaveLength(1);
+    expect(imageRepository.find).toHaveBeenCalledWith({
+      select: [...REVIEW_IMAGE_PUBLIC_QUERY_FIELDS],
+      where: { reviewId: 'review-id' },
+      order: { sortOrder: 'ASC', id: 'ASC' },
+    });
+    expect(response.images[0]).not.toHaveProperty('storageKey');
+  });
+
+  it('deletes image metadata and files when deleting a review', async () => {
+    imageRepository.find.mockResolvedValue([existingImage]);
+    await expect(
+      service.removeOwn('user-id', 'tour-id', 'review-id'),
+    ).resolves.toMatchObject({ images: [] });
+    expect(imageRepository.delete).toHaveBeenCalledWith({
+      reviewId: 'review-id',
+    });
+    expect(storage.removeBestEffort).toHaveBeenCalledWith(['reviews/old.png']);
   });
 });

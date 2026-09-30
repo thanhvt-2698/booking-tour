@@ -12,11 +12,13 @@ import type { EntityManager } from 'typeorm';
 import type { Repository } from 'typeorm';
 import { createPaginationMeta } from '../common/dto/pagination-response.dto';
 import { POSTGRES_UNIQUE_VIOLATION_CODE } from '../database/constants/database.constants';
+import { IMAGE_STORAGE_KEY_SEPARATOR } from '../files/constants/file.constants';
 import { FileStorageService } from '../files/file-storage.service';
 import type { UploadedImage } from '../files/interfaces/uploaded-image.interface';
 import {
   AVATAR_IMAGE_FOLDER_NAME,
   MAX_AVATAR_IMAGE_COUNT,
+  USER_ERROR_KEYS,
   USER_PROFILE_UPDATE_FIELDS,
   UserRole,
   UserStatus,
@@ -160,7 +162,7 @@ export class UsersService {
     avatar?: UploadedImage,
   ): Promise<UserEntity> {
     if (avatar && input.avatarUrl !== undefined) {
-      throw new BadRequestException('errors.avatarFileAndUrlConflict');
+      throw new BadRequestException(USER_ERROR_KEYS.avatarFileAndUrlConflict);
     }
 
     const updates: Partial<UserEntity> = {};
@@ -207,7 +209,11 @@ export class UsersService {
           updates.avatarUrl !== user.avatarUrl
         ) {
           const previousAvatarKey = this.fileStorage.toKey(user.avatarUrl);
-          if (previousAvatarKey?.startsWith('avatars/')) {
+          if (
+            previousAvatarKey?.startsWith(
+              `${AVATAR_IMAGE_FOLDER_NAME}${IMAGE_STORAGE_KEY_SEPARATOR}`,
+            )
+          ) {
             previousAvatarKeys.push(previousAvatarKey);
           }
         }

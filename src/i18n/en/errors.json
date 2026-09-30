@@ -45,7 +45,6 @@
   "reviewAlreadyExists": "You have already reviewed this tour",
   "reviewNotEligible": "Only a completed tour with an approved booking can be reviewed",
   "reviewNotFound": "Review does not exist",
-  "reviewUpdateRequired": "Provide a rating or review body to update",
   "bookingCreatedDateRangeInvalid": "createdFrom must be earlier than or equal to createdTo",
   "cannotChangeOwnAdminRole": "You cannot remove your own admin role",
   "cannotBlockOwnAccount": "You cannot block your own account",
@@ -63,5 +62,8 @@
   "imageCountExceeded": "Too many images were uploaded",
   "imageKeyInvalid": "Image storage key is invalid",
   "tourImageInvalid": "One or more tour images do not belong to this tour",
-  "avatarFileAndUrlConflict": "Provide an avatar file or avatar URL, not both"
+  "avatarFileAndUrlConflict": "Provide an avatar file or avatar URL, not both",
+  "reviewUpdateRequired": "Provide a rating, review body, or image change to update",
+  "reviewImageInvalid": "One or more review images do not belong to this review",
+  "reviewImageNotFound": "Published review image does not exist"
 }

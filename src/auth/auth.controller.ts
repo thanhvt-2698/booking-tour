@@ -22,11 +22,30 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { DEFAULT_RATE_LIMIT_WINDOW_MS } from '../common/constants/app.constants';
-import { MAX_IMAGE_SIZE_BYTES } from '../files/constants/file.constants';
+import {
+  CACHE_CONTROL_HEADER,
+  CACHE_CONTROL_NO_STORE_VALUE,
+  EXPIRES_HEADER,
+  EXPIRES_IMMEDIATELY_VALUE,
+  PRAGMA_HEADER,
+  PRAGMA_NO_CACHE_VALUE,
+} from '../common/constants/security.constants';
+import {
+  IMAGE_UPLOAD_REQUEST_CONTENT_TYPES,
+  MAX_IMAGE_SIZE_BYTES,
+} from '../files/constants/file.constants';
 import type { UploadedImage } from '../files/interfaces/uploaded-image.interface';
-import { MAX_AVATAR_IMAGE_COUNT } from '../users/constants/user.constants';
+import {
+  MAX_AVATAR_IMAGE_COUNT,
+  USER_AVATAR_UPLOAD_FIELD_NAME,
+} from '../users/constants/user.constants';
 import { AuthService } from './auth.service';
-import { LOGIN_RATE_LIMIT } from './constants/auth.constants';
+import {
+  LOGIN_RATE_LIMIT,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from './constants/auth.constants';
+import { USER_EMAIL_MAX_LENGTH } from '../users/constants/user.constants';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -42,9 +61,9 @@ export class AuthController {
   @Throttle({
     default: { limit: LOGIN_RATE_LIMIT, ttl: DEFAULT_RATE_LIMIT_WINDOW_MS },
   })
-  @Header('Cache-Control', 'no-store')
-  @Header('Pragma', 'no-cache')
-  @Header('Expires', '0')
+  @Header(CACHE_CONTROL_HEADER, CACHE_CONTROL_NO_STORE_VALUE)
+  @Header(PRAGMA_HEADER, PRAGMA_NO_CACHE_VALUE)
+  @Header(EXPIRES_HEADER, EXPIRES_IMMEDIATELY_VALUE)
   @ApiOperation({ summary: 'Sign in with email and password' })
   @ApiOkResponse({ type: AuthResponseDto })
   @ApiBadRequestResponse({ description: 'Invalid request body' })
@@ -87,13 +106,21 @@ export class AuthController {
   @Header('Pragma', 'no-cache')
   @Header('Expires', '0')
   @ApiOperation({ summary: 'Register a USER account and issue tokens' })
-  @ApiConsumes('application/json', 'multipart/form-data')
+  @ApiConsumes(...IMAGE_UPLOAD_REQUEST_CONTENT_TYPES)
   @ApiBody({
     schema: {
       properties: {
-        avatar: { format: 'binary', type: 'string' },
-        email: { format: 'email', maxLength: 254, type: 'string' },
-        password: { maxLength: 64, minLength: 12, type: 'string' },
+        [USER_AVATAR_UPLOAD_FIELD_NAME]: { format: 'binary', type: 'string' },
+        email: {
+          format: 'email',
+          maxLength: USER_EMAIL_MAX_LENGTH,
+          type: 'string',
+        },
+        password: {
+          maxLength: PASSWORD_MAX_LENGTH,
+          minLength: PASSWORD_MIN_LENGTH,
+          type: 'string',
+        },
       },
       required: ['email', 'password'],
       type: 'object',
@@ -103,7 +130,7 @@ export class AuthController {
   @ApiBadRequestResponse({ description: 'Invalid request body' })
   @ApiConflictResponse({ description: 'Email is already in use' })
   @UseInterceptors(
-    FileInterceptor('avatar', {
+    FileInterceptor(USER_AVATAR_UPLOAD_FIELD_NAME, {
       limits: {
         fileSize: MAX_IMAGE_SIZE_BYTES,
         files: MAX_AVATAR_IMAGE_COUNT,

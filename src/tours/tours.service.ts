@@ -12,10 +12,7 @@ import { CategoryEntity } from '../categories/entities/category.entity';
 import { createPaginationMeta } from '../common/dto/pagination-response.dto';
 import { toSlug } from '../common/utils/slug.util';
 import { POSTGRES_UNIQUE_VIOLATION_CODE } from '../database/constants/database.constants';
-import {
-  FILE_STORAGE_ERROR_KEYS,
-  TOUR_IMAGE_FOLDER_NAME,
-} from '../files/constants/file.constants';
+import { FILE_STORAGE_ERROR_KEYS } from '../files/constants/file.constants';
 import { TourImageEntity } from '../files/entities/tour-image.entity';
 import { FileStorageService } from '../files/file-storage.service';
 import type { UploadedImage } from '../files/interfaces/uploaded-image.interface';
@@ -26,6 +23,7 @@ import {
   MAX_TOUR_IMAGE_COUNT,
   NEXT_CALENDAR_DAY_OFFSET,
   TOUR_IMAGE_ERROR_KEYS,
+  TOUR_IMAGE_FOLDER_NAME,
   TOUR_PUBLIC_FIELDS,
   TOUR_QUERY_FIELDS,
   TOUR_IMAGE_PUBLIC_FIELDS,

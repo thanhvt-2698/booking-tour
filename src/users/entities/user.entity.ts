@@ -13,7 +13,12 @@ import { BookingStatusHistoryEntity } from '../../bookings/entities/booking-stat
 import { BookingEntity } from '../../bookings/entities/booking.entity';
 import { ReviewEntity } from '../../reviews/entities/review.entity';
 import { TourEntity } from '../../tours/entities/tour.entity';
-import { UserRole, UserStatus } from '../constants/user.constants';
+import { MAX_IMAGE_PUBLIC_URL_LENGTH } from '../../files/constants/file.constants';
+import {
+  USER_EMAIL_MAX_LENGTH,
+  UserRole,
+  UserStatus,
+} from '../constants/user.constants';
 
 @Entity({ name: 'users' })
 export class UserEntity {
@@ -21,7 +26,7 @@ export class UserEntity {
   id!: string;
 
   @Index('IDX_users_email_unique', { unique: true })
-  @Column({ length: 254, type: 'varchar' })
+  @Column({ length: USER_EMAIL_MAX_LENGTH, type: 'varchar' })
   email!: string;
 
   @Column({
@@ -52,7 +57,12 @@ export class UserEntity {
   @Column({ nullable: true, type: 'text' })
   bio!: string | null;
 
-  @Column({ length: 2048, name: 'avatar_url', nullable: true, type: 'varchar' })
+  @Column({
+    length: MAX_IMAGE_PUBLIC_URL_LENGTH,
+    name: 'avatar_url',
+    nullable: true,
+    type: 'varchar',
+  })
   avatarUrl!: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })

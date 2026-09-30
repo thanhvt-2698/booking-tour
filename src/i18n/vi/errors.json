@@ -45,7 +45,6 @@
   "reviewAlreadyExists": "Bạn đã đánh giá tour này",
   "reviewNotEligible": "Chỉ có thể đánh giá tour đã kết thúc với booking được duyệt",
   "reviewNotFound": "Đánh giá không tồn tại",
-  "reviewUpdateRequired": "Cần cung cấp điểm hoặc nội dung đánh giá để cập nhật",
   "bookingCreatedDateRangeInvalid": "createdFrom phải trước hoặc bằng createdTo",
   "cannotChangeOwnAdminRole": "Bạn không thể tự xóa quyền quản trị của mình",
   "cannotBlockOwnAccount": "Bạn không thể tự khóa tài khoản của mình",
@@ -63,5 +62,8 @@
   "imageCountExceeded": "Số lượng ảnh tải lên vượt giới hạn",
   "imageKeyInvalid": "Mã lưu trữ ảnh không hợp lệ",
   "tourImageInvalid": "Một hoặc nhiều ảnh không thuộc tour này",
-  "avatarFileAndUrlConflict": "Chỉ gửi file avatar hoặc URL avatar, không gửi cả hai"
+  "avatarFileAndUrlConflict": "Chỉ gửi file avatar hoặc URL avatar, không gửi cả hai",
+  "reviewUpdateRequired": "Cần cung cấp điểm, nội dung hoặc thay đổi ảnh để cập nhật",
+  "reviewImageInvalid": "Một hoặc nhiều ảnh không thuộc đánh giá này",
+  "reviewImageNotFound": "Không tìm thấy ảnh của đánh giá đã công khai"
 }

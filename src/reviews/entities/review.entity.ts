@@ -6,6 +6,7 @@ import {
   Index,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
@@ -13,6 +14,7 @@ import { BookingEntity } from '../../bookings/entities/booking.entity';
 import { TourEntity } from '../../tours/entities/tour.entity';
 import { UserEntity } from '../../users/entities/user.entity';
 import { ReviewStatus } from '../constants/review.constants';
+import { ReviewImageEntity } from './review-image.entity';
 
 @Entity({ name: 'reviews' })
 @Index('IDX_reviews_user_tour_unique', ['userId', 'tourId'], { unique: true })
@@ -46,6 +48,9 @@ export class ReviewEntity {
 
   @PrimaryGeneratedColumn('uuid')
   id!: string;
+
+  @OneToMany(() => ReviewImageEntity, (image) => image.review)
+  images!: ReviewImageEntity[];
 
   @Column({ type: 'smallint' })
   rating!: number;

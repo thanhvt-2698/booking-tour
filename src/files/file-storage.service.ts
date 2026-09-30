@@ -11,6 +11,7 @@ import {
   FILE_WRITE_FLAG_NO_OVERWRITE,
   IMAGE_FILE_SIGNATURES,
   IMAGE_FILENAME_FORBIDDEN_CHARACTERS,
+  IMAGE_MIME_TYPES,
   IMAGE_MIME_TYPE_BY_EXTENSION,
   IMAGE_SIGNATURE_START_OFFSET,
   EXPECTED_IMAGE_STORAGE_KEY_SEGMENT_COUNT,
@@ -19,7 +20,6 @@ import {
   MAX_IMAGE_SIZE_BYTES,
   MAX_IMAGE_ORIGINAL_NAME_LENGTH,
   MINIMUM_IMAGE_SIZE_BYTES,
-  TOUR_IMAGE_MIME_TYPES,
   UPLOAD_URL_PREFIX,
   UNKNOWN_ERROR_NAME,
   WEBP_FORMAT_SIGNATURE_OFFSET,
@@ -166,13 +166,13 @@ export class FileStorageService {
   }
 
   private matchesSignature(buffer: Buffer, mimeType: string): boolean {
-    if (mimeType === TOUR_IMAGE_MIME_TYPES.jpeg) {
+    if (mimeType === IMAGE_MIME_TYPES.jpeg) {
       return this.startsWithSignature(buffer, IMAGE_FILE_SIGNATURES.jpeg);
     }
-    if (mimeType === TOUR_IMAGE_MIME_TYPES.png) {
+    if (mimeType === IMAGE_MIME_TYPES.png) {
       return this.startsWithSignature(buffer, IMAGE_FILE_SIGNATURES.png);
     }
-    if (mimeType === TOUR_IMAGE_MIME_TYPES.webp) {
+    if (mimeType === IMAGE_MIME_TYPES.webp) {
       return (
         buffer.length >=
           WEBP_FORMAT_SIGNATURE_OFFSET +
