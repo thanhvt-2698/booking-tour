@@ -1,8 +1,8 @@
-import type { BookingStatus } from '../../bookings/constants/booking.constants';
+import type { BookingReminderNotificationJob } from './booking-reminder-notification-job.interface';
+import type { BookingStatusNotificationJob } from './booking-status-notification-job.interface';
+import type { LegacyBookingStatusNotificationJob } from './legacy-booking-status-notification-job.interface';
 
-export interface BookingNotificationJob {
-  bookingId: string;
-  reason: string | null;
-  recipientUserId: string;
-  status: BookingStatus.APPROVED | BookingStatus.REJECTED;
-}
+export type BookingNotificationJob =
+  | BookingReminderNotificationJob
+  | BookingStatusNotificationJob
+  | LegacyBookingStatusNotificationJob;

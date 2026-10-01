@@ -5,7 +5,7 @@ import { TourEntity } from '../tours/entities/tour.entity';
 import { BookingsController } from './bookings.controller';
 import { BookingsService } from './bookings.service';
 import { AdminBookingsController } from './admin-bookings.controller';
-import { AdminBookingsStore } from './admin-bookings.store';
+import { AdminBookingPersistenceService } from './admin-booking-persistence.service';
 import { AdminBookingsService } from './admin-bookings.service';
 import { BookingEventsService } from './booking-events.service';
 import { BookingStatusHistoryEntity } from './entities/booking-status-history.entity';
@@ -23,7 +23,7 @@ import { BookingEntity } from './entities/booking.entity';
     ]),
   ],
   providers: [
-    AdminBookingsStore,
+    AdminBookingPersistenceService,
     AdminBookingsService,
     BookingEventsService,
     BookingsService,
