@@ -58,5 +58,9 @@
   "notFound": "Không tìm thấy dữ liệu",
   "conflict": "Dữ liệu bị trùng hoặc xung đột",
   "rateLimit": "Quá nhiều yêu cầu",
-  "internal": "Lỗi hệ thống"
+  "internal": "Lỗi hệ thống",
+  "imageInvalid": "Hãy tải ảnh JPEG, PNG hoặc WebP không rỗng, tối đa 5 MB",
+  "imageCountExceeded": "Số lượng ảnh tải lên vượt giới hạn",
+  "imageKeyInvalid": "Mã lưu trữ ảnh không hợp lệ",
+  "tourImageInvalid": "Một hoặc nhiều ảnh không thuộc tour này"
 }

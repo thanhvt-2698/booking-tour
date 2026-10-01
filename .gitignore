@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+uploads/
 Plans/
 docs/
 PROJECT_RULES.md

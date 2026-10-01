@@ -47,4 +47,32 @@ describe('Swagger auth and RBAC contract', () => {
       document.paths['/api/admin/users/{userId}/role']?.patch?.tags,
     ).toContain('Administration');
   });
+  it('documents tour image uploads on create and update', () => {
+    const document = SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder().build(),
+    );
+    for (const operation of [
+      document.paths['/api/admin/tours']?.post,
+      document.paths['/api/admin/tours/{tourId}']?.patch,
+    ]) {
+      expect(operation?.requestBody).toMatchObject({
+        content: {
+          'application/json': expect.any(Object) as unknown,
+          'multipart/form-data': expect.any(Object) as unknown,
+        },
+      });
+    }
+    expect(document.components?.schemas?.CreateTourWithImagesDto).toMatchObject(
+      {
+        properties: {
+          images: {
+            type: 'array',
+            maxItems: 10,
+            items: { type: 'string', format: 'binary' },
+          },
+        },
+      },
+    );
+  });
 });

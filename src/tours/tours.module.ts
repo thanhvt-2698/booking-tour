@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CategoryEntity } from '../categories/entities/category.entity';
 import { BookingEntity } from '../bookings/entities/booking.entity';
+import { FilesModule } from '../files/files.module';
+import { TourImageEntity } from '../files/entities/tour-image.entity';
 import { AdminDeparturesController } from './admin-departures.controller';
 import { AdminTourDeparturesController } from './admin-tour-departures.controller';
 import { AdminToursController } from './admin-tours.controller';
@@ -19,11 +21,13 @@ import { ToursService } from './tours.service';
     ToursController,
   ],
   imports: [
+    FilesModule,
     TypeOrmModule.forFeature([
       BookingEntity,
       CategoryEntity,
       TourDepartureEntity,
       TourEntity,
+      TourImageEntity,
     ]),
   ],
   providers: [DeparturesService, ToursService],
