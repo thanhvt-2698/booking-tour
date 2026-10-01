@@ -9,6 +9,13 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { TourEntity } from '../../tours/entities/tour.entity';
+import { FIRST_TOUR_IMAGE_SORT_ORDER } from '../../tours/constants/tour.constants';
+import {
+  MAX_IMAGE_MIME_TYPE_LENGTH,
+  MAX_IMAGE_ORIGINAL_NAME_LENGTH,
+  MAX_IMAGE_PUBLIC_URL_LENGTH,
+  MAX_IMAGE_STORAGE_KEY_LENGTH,
+} from '../constants/file.constants';
 
 @Entity({ name: 'tour_images' })
 @Index('IDX_tour_images_tour_sort', ['tourId', 'sortOrder', 'createdAt'])
@@ -16,26 +23,42 @@ export class TourImageEntity {
   @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
   createdAt!: Date;
 
-  @Column({ name: 'mime_type', length: 100, type: 'varchar' })
+  @Column({
+    name: 'mime_type',
+    length: MAX_IMAGE_MIME_TYPE_LENGTH,
+    type: 'varchar',
+  })
   mimeType!: string;
 
-  @Column({ name: 'original_name', length: 255, type: 'varchar' })
+  @Column({
+    name: 'original_name',
+    length: MAX_IMAGE_ORIGINAL_NAME_LENGTH,
+    type: 'varchar',
+  })
   originalName!: string;
 
   @Column({ name: 'size_bytes', type: 'integer' })
   sizeBytes!: number;
 
-  @Column({ name: 'sort_order', default: 0, type: 'integer' })
+  @Column({
+    name: 'sort_order',
+    default: FIRST_TOUR_IMAGE_SORT_ORDER,
+    type: 'integer',
+  })
   sortOrder!: number;
 
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
   @Index('IDX_tour_images_storage_key_unique', { unique: true })
-  @Column({ name: 'storage_key', length: 255, type: 'varchar' })
+  @Column({
+    name: 'storage_key',
+    length: MAX_IMAGE_STORAGE_KEY_LENGTH,
+    type: 'varchar',
+  })
   storageKey!: string;
 
-  @Column({ length: 2048, type: 'varchar' })
+  @Column({ length: MAX_IMAGE_PUBLIC_URL_LENGTH, type: 'varchar' })
   url!: string;
 
   @Index('IDX_tour_images_tour_id')

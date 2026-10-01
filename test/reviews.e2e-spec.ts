@@ -11,6 +11,8 @@ import { CategoryStatus } from '../src/categories/constants/category.constants';
 import { CategoryEntity } from '../src/categories/entities/category.entity';
 import { ReviewStatus } from '../src/reviews/constants/review.constants';
 import { ReviewEntity } from '../src/reviews/entities/review.entity';
+import { ReviewImageEntity } from '../src/reviews/entities/review-image.entity';
+import { FileStorageService } from '../src/files/file-storage.service';
 import { DepartureStatus } from '../src/tours/constants/departure.constants';
 import { TourStatus } from '../src/tours/constants/tour.constants';
 import { TourDepartureEntity } from '../src/tours/entities/tour-departure.entity';
@@ -24,6 +26,7 @@ describe('Tour reviews (e2e)', () => {
   let categoriesRepository: Repository<CategoryEntity>;
   let departuresRepository: Repository<TourDepartureEntity>;
   let reviewsRepository: Repository<ReviewEntity>;
+  let reviewImagesRepository: Repository<ReviewImageEntity>;
   let toursRepository: Repository<TourEntity>;
   let usersRepository: Repository<UserEntity>;
   let admin: UserEntity;
@@ -35,6 +38,11 @@ describe('Tour reviews (e2e)', () => {
   let ownerBooking: BookingEntity;
   let otherBooking: BookingEntity;
   let hiddenBooking: BookingEntity;
+
+  const png = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a5x8AAAAASUVORK5CYII=',
+    'base64',
+  );
 
   const tokenFor = (user: UserEntity): string =>
     app.get(JwtService).sign({ sub: user.id });
@@ -104,6 +112,7 @@ describe('Tour reviews (e2e)', () => {
     categoriesRepository = dataSource.getRepository(CategoryEntity);
     departuresRepository = dataSource.getRepository(TourDepartureEntity);
     reviewsRepository = dataSource.getRepository(ReviewEntity);
+    reviewImagesRepository = dataSource.getRepository(ReviewImageEntity);
     toursRepository = dataSource.getRepository(TourEntity);
     usersRepository = dataSource.getRepository(UserEntity);
   });
@@ -192,6 +201,182 @@ describe('Tour reviews (e2e)', () => {
 
   afterAll(async () => {
     await app?.close();
+  });
+
+  afterEach(async () => {
+    if (!reviewImagesRepository) return;
+    const images = await reviewImagesRepository.find({
+      select: ['storageKey'],
+    });
+    await app
+      .get(FileStorageService)
+      .removeBestEffort(images.map((image) => image.storageKey));
+  });
+
+  it('creates a review with three images in one multipart request and serves only visible review images', async () => {
+    const response = await request(app.getHttpServer())
+      .post(`/api/tours/${tour.id}/reviews`)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .field('body', '  Review with photos  ')
+      .field('rating', '5')
+      .attach('images', png, 'first.png')
+      .attach('images', png, 'second.png')
+      .attach('images', png, 'third.png')
+      .expect(201);
+    const review = response.body as {
+      id: string;
+      body: string;
+      images: Array<{ id: string; url: string; storageKey?: string }>;
+    };
+    expect(review.body).toBe('Review with photos');
+    expect(review.images).toHaveLength(3);
+    expect(review.images[0].storageKey).toBeUndefined();
+    expect(await reviewImagesRepository.countBy({ reviewId: review.id })).toBe(
+      3,
+    );
+    const imageUrl = review.images[0].url;
+    const download = await request(app.getHttpServer())
+      .get(imageUrl)
+      .expect('Content-Type', /image\/png/)
+      .expect('Cache-Control', 'no-store')
+      .expect('X-Content-Type-Options', 'nosniff')
+      .expect(200);
+    expect(download.body).toEqual(png);
+
+    await request(app.getHttpServer())
+      .patch(`/api/admin/reviews/${review.id}`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ status: ReviewStatus.HIDDEN })
+      .expect(200);
+    await request(app.getHttpServer()).get(imageUrl).expect(404);
+    await request(app.getHttpServer())
+      .patch(`/api/admin/reviews/${review.id}`)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .send({ status: ReviewStatus.PUBLISHED })
+      .expect(200);
+    await toursRepository.update(tour.id, { status: TourStatus.DRAFT });
+    await request(app.getHttpServer()).get(imageUrl).expect(404);
+    await toursRepository.update(tour.id, { status: TourStatus.PUBLISHED });
+    await request(app.getHttpServer())
+      .delete(`/api/tours/${tour.id}/reviews/${review.id}`)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .expect(200);
+    await request(app.getHttpServer()).get(imageUrl).expect(404);
+    expect(await reviewImagesRepository.countBy({ reviewId: review.id })).toBe(
+      0,
+    );
+    await request(app.getHttpServer())
+      .get('/api/review-images/not-a-valid-file.png')
+      .expect(400);
+  });
+
+  it('validates image content, upload limits and authentication without creating a review', async () => {
+    const url = `/api/tours/${tour.id}/reviews`;
+    await request(app.getHttpServer())
+      .post(url)
+      .field('body', 'Unauthorized')
+      .field('rating', '5')
+      .attach('images', png, 'photo.png')
+      .expect(401);
+    await request(app.getHttpServer())
+      .post(url)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .field('body', 'Invalid image')
+      .field('rating', '5')
+      .attach('images', Buffer.from('plain text'), {
+        filename: 'spoofed.png',
+        contentType: 'image/png',
+      })
+      .expect(400);
+    await request(app.getHttpServer())
+      .post(url)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .field('body', 'Too many photos')
+      .field('rating', '5')
+      .attach('images', png, 'one.png')
+      .attach('images', png, 'two.png')
+      .attach('images', png, 'three.png')
+      .attach('images', png, 'four.png')
+      .expect(400);
+    expect(await reviewsRepository.count()).toBe(0);
+    expect(await reviewImagesRepository.count()).toBe(0);
+  });
+
+  it('updates text and replaces selected photos atomically while preserving other photos', async () => {
+    const created = await request(app.getHttpServer())
+      .post(`/api/tours/${tour.id}/reviews`)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .field('body', 'Original with images')
+      .field('rating', '5')
+      .attach('images', png, 'one.png')
+      .attach('images', png, 'two.png')
+      .attach('images', png, 'three.png')
+      .expect(201);
+    const review = created.body as {
+      id: string;
+      images: Array<{ id: string; url: string }>;
+    };
+    const url = `/api/tours/${tour.id}/reviews/${review.id}`;
+    await request(app.getHttpServer())
+      .patch(url)
+      .set('Authorization', `Bearer ${tokenFor(otherUser)}`)
+      .attach('images', png, 'unauthorized.png')
+      .expect(404);
+    await request(app.getHttpServer())
+      .patch(url)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .field('body', 'Should not be saved')
+      .attach('images', png, 'four.png')
+      .expect(400);
+    await request(app.getHttpServer())
+      .patch(url)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .field('removeImageIds', '["invalid-id"]')
+      .expect(400);
+    const persisted = await reviewsRepository.findOne({
+      select: ['body'],
+      where: { id: review.id },
+    });
+    expect(persisted?.body).toBe('Original with images');
+
+    const updated = await request(app.getHttpServer())
+      .patch(url)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .field('body', '  Updated with replacement  ')
+      .field('rating', '4')
+      .field('removeImageIds', JSON.stringify([review.images[0].id]))
+      .attach('images', png, 'replacement.png')
+      .expect(200);
+    const result = updated.body as {
+      body: string;
+      rating: number;
+      images: Array<{ id: string; originalName: string }>;
+    };
+    expect(result).toMatchObject({
+      body: 'Updated with replacement',
+      rating: 4,
+    });
+    expect(result.images).toHaveLength(3);
+    expect(result.images.map((image) => image.id)).toEqual(
+      expect.arrayContaining([review.images[1].id, review.images[2].id]),
+    );
+    expect(
+      result.images.find((image) => image.id === review.images[0].id),
+    ).toBeUndefined();
+    expect(
+      result.images.some((image) => image.originalName === 'replacement.png'),
+    ).toBe(true);
+    await request(app.getHttpServer()).get(review.images[0].url).expect(404);
+
+    await request(app.getHttpServer())
+      .patch(url)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .send({ removeImageIds: result.images.map((image) => image.id) })
+      .expect(200)
+      .expect(({ body }) => expect(body).toMatchObject({ images: [] }));
+    expect(await reviewImagesRepository.countBy({ reviewId: review.id })).toBe(
+      0,
+    );
   });
 
   it('creates one review for an eligible booking and rejects duplicate or invalid submissions', async () => {

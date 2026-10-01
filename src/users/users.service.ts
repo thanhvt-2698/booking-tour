@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -10,7 +12,17 @@ import type { EntityManager } from 'typeorm';
 import type { Repository } from 'typeorm';
 import { createPaginationMeta } from '../common/dto/pagination-response.dto';
 import { POSTGRES_UNIQUE_VIOLATION_CODE } from '../database/constants/database.constants';
-import { UserRole, UserStatus } from './constants/user.constants';
+import { IMAGE_STORAGE_KEY_SEPARATOR } from '../files/constants/file.constants';
+import { FileStorageService } from '../files/file-storage.service';
+import type { UploadedImage } from '../files/interfaces/uploaded-image.interface';
+import {
+  AVATAR_IMAGE_FOLDER_NAME,
+  MAX_AVATAR_IMAGE_COUNT,
+  USER_ERROR_KEYS,
+  USER_PROFILE_UPDATE_FIELDS,
+  UserRole,
+  UserStatus,
+} from './constants/user.constants';
 import type { AdminUserQueryDto } from './dto/admin-user-query.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { UpdateUserRoleDto } from './dto/update-user-role.dto';
@@ -38,17 +50,22 @@ export class UsersService {
     private readonly dataSource: DataSource,
     @InjectRepository(UserEntity)
     private readonly usersRepository: Repository<UserEntity>,
+    private readonly fileStorage: FileStorageService,
   ) {}
 
-  async create(input: CreateUserInput): Promise<UserEntity> {
-    const user = this.usersRepository.create({
+  async create(
+    input: CreateUserInput,
+    usersRepository: Repository<UserEntity> = this.usersRepository,
+  ): Promise<UserEntity> {
+    const user = usersRepository.create({
+      ...(input.avatarUrl ? { avatarUrl: input.avatarUrl } : {}),
       email: this.normalizeEmail(input.email),
       passwordHash: input.passwordHash,
       role: input.role ?? UserRole.USER,
     });
 
     try {
-      return await this.usersRepository.save(user);
+      return await usersRepository.save(user);
     } catch (error: unknown) {
       if (this.isUniqueViolation(error)) {
         throw new ConflictException('errors.userConflict');
@@ -142,41 +159,93 @@ export class UsersService {
   async updateProfile(
     id: string,
     input: UpdateProfileDto,
+    avatar?: UploadedImage,
   ): Promise<UserEntity> {
-    const user = await this.usersRepository.findOne({
-      select: ['id', 'avatarUrl', 'bio'],
-      where: { id },
-    });
-
-    if (!user) {
-      throw new NotFoundException('errors.userNotFound');
+    if (avatar && input.avatarUrl !== undefined) {
+      throw new BadRequestException(USER_ERROR_KEYS.avatarFileAndUrlConflict);
     }
+
     const updates: Partial<UserEntity> = {};
+    let newAvatarKey: string | undefined;
+    const previousAvatarKeys: string[] = [];
+
+    if (avatar) {
+      const [storedAvatar] = await this.fileStorage.store(
+        [avatar],
+        AVATAR_IMAGE_FOLDER_NAME,
+        MAX_AVATAR_IMAGE_COUNT,
+      );
+      if (!storedAvatar) {
+        throw new InternalServerErrorException('errors.internal');
+      }
+
+      updates.avatarUrl = storedAvatar.url;
+      newAvatarKey = storedAvatar.storageKey;
+    }
 
     if (input.avatarUrl !== undefined) {
-      updates.avatarUrl = input.avatarUrl.trim();
+      updates.avatarUrl = input.avatarUrl?.trim() ?? null;
     }
     if (input.bio !== undefined) {
-      updates.bio = input.bio.trim();
+      updates.bio = input.bio?.trim() ?? null;
     }
-    Object.assign(user, updates);
-
+    let savedUser: UserEntity;
     try {
-      return await this.usersRepository.save(user);
+      savedUser = await this.dataSource.transaction(async (manager) => {
+        const repository = manager.getRepository(UserEntity);
+        const user = await repository.findOne({
+          select: [...USER_PROFILE_UPDATE_FIELDS],
+          lock: { mode: 'pessimistic_write' },
+          where: { id },
+        });
+
+        if (!user) {
+          throw new NotFoundException('errors.userNotFound');
+        }
+
+        if (
+          user.avatarUrl &&
+          updates.avatarUrl !== undefined &&
+          updates.avatarUrl !== user.avatarUrl
+        ) {
+          const previousAvatarKey = this.fileStorage.toKey(user.avatarUrl);
+          if (
+            previousAvatarKey?.startsWith(
+              `${AVATAR_IMAGE_FOLDER_NAME}${IMAGE_STORAGE_KEY_SEPARATOR}`,
+            )
+          ) {
+            previousAvatarKeys.push(previousAvatarKey);
+          }
+        }
+
+        Object.assign(user, updates);
+        return repository.save(user);
+      });
     } catch (error: unknown) {
+      if (newAvatarKey) {
+        await this.fileStorage.removeBestEffort([newAvatarKey]);
+      }
       if (this.isUniqueViolation(error)) {
         throw new ConflictException('errors.userConflict');
       }
 
       throw error;
     }
+
+    if (previousAvatarKeys.length > 0) {
+      await this.fileStorage.removeBestEffort(previousAvatarKeys);
+    }
+
+    return savedUser;
   }
 
   async updateProfileResponse(
     id: string,
     input: UpdateProfileDto,
+    avatar?: UploadedImage,
   ): Promise<UserResponse> {
-    return this.toResponse(await this.updateProfile(id, input));
+    await this.updateProfile(id, input, avatar);
+    return this.getProfile(id);
   }
 
   async updateRole(

@@ -66,6 +66,13 @@ describe('FileStorageService', () => {
     expect(writeFile).not.toHaveBeenCalled();
   });
 
+  it('uses the configured protected URL for review images', async () => {
+    const [stored] = await service.store([image], 'reviews', 3);
+    expect(stored.url).toBe(
+      `/${process.env.API_PREFIX ?? 'api'}/review-images/${stored.storageKey.slice('reviews/'.length)}`,
+    );
+  });
+
   it.each([
     { ...image, buffer: Buffer.alloc(0), size: 0 },
     { ...image, size: image.size + 1 },

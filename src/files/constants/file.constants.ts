@@ -2,10 +2,16 @@ export const FILE_STORAGE = Symbol('FILE_STORAGE');
 export const FILE_NOT_FOUND_CODE = 'ENOENT';
 export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
 export const MAX_IMAGE_ORIGINAL_NAME_LENGTH = 255;
-export const MAX_TOUR_IMAGE_SIZE_BYTES = MAX_IMAGE_SIZE_BYTES;
+export const MAX_IMAGE_STORAGE_KEY_LENGTH = 255;
+export const MAX_IMAGE_PUBLIC_URL_LENGTH = 2048;
+export const MAX_IMAGE_MIME_TYPE_LENGTH = 100;
 export const UPLOAD_DIRECTORY_NAME = 'uploads';
 export const UPLOAD_URL_PREFIX = '/uploads/';
-export const TOUR_IMAGE_FOLDER_NAME = 'tours';
+export const IMAGE_UPLOAD_FIELD_NAME = 'images';
+export const IMAGE_UPLOAD_REQUEST_CONTENT_TYPES = [
+  'multipart/form-data',
+  'application/json',
+] as const;
 
 export const IMAGE_FILE_EXTENSIONS = {
   jpg: '.jpg',
@@ -14,17 +20,17 @@ export const IMAGE_FILE_EXTENSIONS = {
   webp: '.webp',
 } as const;
 
-export const TOUR_IMAGE_MIME_TYPES = {
+export const IMAGE_MIME_TYPES = {
   jpeg: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp',
 } as const;
 
 export const IMAGE_MIME_TYPE_BY_EXTENSION: Readonly<Record<string, string>> = {
-  [IMAGE_FILE_EXTENSIONS.jpg]: TOUR_IMAGE_MIME_TYPES.jpeg,
-  [IMAGE_FILE_EXTENSIONS.jpeg]: TOUR_IMAGE_MIME_TYPES.jpeg,
-  [IMAGE_FILE_EXTENSIONS.png]: TOUR_IMAGE_MIME_TYPES.png,
-  [IMAGE_FILE_EXTENSIONS.webp]: TOUR_IMAGE_MIME_TYPES.webp,
+  [IMAGE_FILE_EXTENSIONS.jpg]: IMAGE_MIME_TYPES.jpeg,
+  [IMAGE_FILE_EXTENSIONS.jpeg]: IMAGE_MIME_TYPES.jpeg,
+  [IMAGE_FILE_EXTENSIONS.png]: IMAGE_MIME_TYPES.png,
+  [IMAGE_FILE_EXTENSIONS.webp]: IMAGE_MIME_TYPES.webp,
 };
 
 const MANAGED_IMAGE_EXTENSION_PATTERN = Object.values(IMAGE_FILE_EXTENSIONS)

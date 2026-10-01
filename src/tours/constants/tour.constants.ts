@@ -5,11 +5,7 @@ export enum TourStatus {
 }
 
 export const MAX_TOUR_IMAGE_COUNT = 10;
-export const TOUR_IMAGE_UPLOAD_FIELD_NAME = 'images';
-export const TOUR_IMAGE_REQUEST_CONTENT_TYPES = [
-  'multipart/form-data',
-  'application/json',
-] as const;
+export const TOUR_IMAGE_FOLDER_NAME = 'tours';
 export const TOUR_IMAGE_JSON_ARRAY_PREFIX = '[';
 export const FIRST_TOUR_IMAGE_SORT_ORDER = 0;
 export const TOUR_IMAGE_SORT_ORDER_INCREMENT = 1;

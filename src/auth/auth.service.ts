@@ -1,4 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as bcrypt from 'bcrypt';
@@ -6,8 +10,14 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { Repository } from 'typeorm';
 import { DataSource, IsNull } from 'typeorm';
 import { getJwtConfig } from '../config/jwt.config';
-import { UserStatus } from '../users/constants/user.constants';
-import type { UserEntity } from '../users/entities/user.entity';
+import { FileStorageService } from '../files/file-storage.service';
+import type { UploadedImage } from '../files/interfaces/uploaded-image.interface';
+import {
+  AVATAR_IMAGE_FOLDER_NAME,
+  MAX_AVATAR_IMAGE_COUNT,
+  UserStatus,
+} from '../users/constants/user.constants';
+import { UserEntity } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
 import {
   PASSWORD_HASH_ROUNDS,
@@ -26,19 +36,52 @@ export class AuthService {
     @InjectRepository(RefreshTokenEntity)
     private readonly refreshTokensRepository: Repository<RefreshTokenEntity>,
     private readonly usersService: UsersService,
+    private readonly fileStorage: FileStorageService,
   ) {}
 
-  async register(input: RegisterDto): Promise<TokenPair> {
+  async register(
+    input: RegisterDto,
+    avatar?: UploadedImage,
+  ): Promise<TokenPair> {
     const passwordHash = await bcrypt.hash(
       input.password,
       PASSWORD_HASH_ROUNDS,
     );
-    const user = await this.usersService.create({
-      email: input.email,
-      passwordHash,
-    });
+    const [storedAvatar] = avatar
+      ? await this.fileStorage.store(
+          [avatar],
+          AVATAR_IMAGE_FOLDER_NAME,
+          MAX_AVATAR_IMAGE_COUNT,
+        )
+      : [];
 
-    return this.issueTokenPair(user);
+    if (avatar && !storedAvatar) {
+      throw new InternalServerErrorException('errors.internal');
+    }
+
+    try {
+      return await this.dataSource.transaction(async (manager) => {
+        const user = await this.usersService.create(
+          {
+            ...(storedAvatar ? { avatarUrl: storedAvatar.url } : {}),
+            email: input.email,
+            passwordHash,
+          },
+          manager.getRepository(UserEntity),
+        );
+
+        return this.issueTokenPair(
+          user,
+          randomUUID(),
+          manager.getRepository(RefreshTokenEntity),
+        );
+      });
+    } catch (error: unknown) {
+      if (storedAvatar) {
+        await this.fileStorage.removeBestEffort([storedAvatar.storageKey]);
+      }
+      throw error;
+    }
   }
 
   async login(input: LoginDto): Promise<TokenPair> {

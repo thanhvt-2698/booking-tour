@@ -75,4 +75,39 @@ describe('Swagger auth and RBAC contract', () => {
       },
     );
   });
+  it('documents avatar uploads on registration and profile update', () => {
+    const document = SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder().build(),
+    );
+    for (const operation of [
+      document.paths['/api/auth/register']?.post,
+      document.paths['/api/users/me']?.patch,
+    ]) {
+      expect(operation?.requestBody).toMatchObject({
+        content: {
+          'application/json': expect.any(Object) as unknown,
+          'multipart/form-data': expect.any(Object) as unknown,
+        },
+      });
+    }
+  });
+  it('documents review uploads and visibility-controlled downloads', () => {
+    const document = SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder().build(),
+    );
+    for (const operation of [
+      document.paths['/api/tours/{tourId}/reviews']?.post,
+      document.paths['/api/tours/{tourId}/reviews/{reviewId}']?.patch,
+    ]) {
+      expect(operation?.requestBody).toMatchObject({
+        content: {
+          'application/json': expect.any(Object) as unknown,
+          'multipart/form-data': expect.any(Object) as unknown,
+        },
+      });
+    }
+    expect(document.paths['/api/review-images/{filename}']?.get).toBeDefined();
+  });
 });
