@@ -33,4 +33,23 @@ describe('Environment configuration', () => {
       REDIS_PORT: DEFAULT_REDIS_PORT,
     });
   });
+
+  it('disables automatic jobs in tests and validates scheduler limits', () => {
+    expect(validateEnvironment({ NODE_ENV: 'test' })).toMatchObject({
+      BOOKING_PENDING_TTL_HOURS: 24,
+      SCHEDULER_BATCH_SIZE: 100,
+      SCHEDULER_ENABLED: false,
+    });
+    expect(
+      validateEnvironment({ NODE_ENV: 'development' }).SCHEDULER_ENABLED,
+    ).toBe(true);
+    expect(
+      validateEnvironment({ NODE_ENV: 'test', SCHEDULER_ENABLED: 'true' })
+        .SCHEDULER_ENABLED,
+    ).toBe(true);
+    expect(() =>
+      validateEnvironment({ BOOKING_PENDING_TTL_HOURS: 0 }),
+    ).toThrow();
+    expect(() => validateEnvironment({ SCHEDULER_BATCH_SIZE: 0 })).toThrow();
+  });
 });

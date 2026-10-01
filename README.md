@@ -83,3 +83,20 @@ npm run start:dev
 npm run build
 npm run start:prod
 ```
+
+## Scheduler và notification recovery
+
+- Cron chạy mỗi phút, xử lý từng batch: đóng departure hết hạn đặt/đã khởi hành, hoàn tất departure đã kết thúc, hủy booking `PENDING` quá hạn và hoàn chỗ, tạo reminder cho booking `APPROVED` khởi hành trong 24 giờ tới.
+- `BOOKING_PENDING_TTL_HOURS=24` cấu hình thời gian chờ duyệt; `SCHEDULER_BATCH_SIZE=100` giới hạn số bản ghi mỗi tác vụ mỗi lượt. `SCHEDULER_ENABLED=true` bật cron; mặc định tắt trong môi trường test.
+- Approve/reject lưu notification outbox cùng transaction với booking/history. Cron khôi phục các notification chưa xử lý khi Redis enqueue lỗi hoặc job bị mất. Job đã hết số lần retry cần chạy command retry thủ công.
+- Áp dụng migration mới trước khi chạy phiên bản này. Build trước khi dùng các command sau; chúng không mở HTTP server và tắt cron tự động:
+
+```sh
+npm run build
+npm run scheduler:run
+npm run notifications:retry
+```
+
+Reminder được kiểm tra lại trước khi gửi; không gửi cho lịch bị hủy, đã qua hoặc bị đổi thời gian. `MAIL_ENABLED=false` đánh dấu notification đã bỏ qua, không tự gửi lại khi bật mail về sau. Outbox và job ID giảm gửi trùng; SMTP có thể gửi lại nếu process dừng sau khi SMTP nhận email nhưng trước khi lưu trạng thái đã xử lý. Cấu hình một replica chạy scheduler; cursor reminder hiện nằm trong bộ nhớ process.
+
+Các service transaction sử dụng repository từ cùng `EntityManager` để booking, số chỗ, history và outbox commit/rollback cùng nhau. SunLint C033 có thể cảnh báo các thao tác ORM này; dùng repository toàn cục thay cho repository của transaction sẽ làm mất tính nguyên tử. Các warning này cần được review theo thiết kế transaction, không tắt rule hay thêm directive bypass.
