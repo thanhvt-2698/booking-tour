@@ -11,8 +11,8 @@ import {
   CONTENT_TYPE_OPTIONS_HEADER,
   CONTENT_TYPE_OPTIONS_NOSNIFF_VALUE,
 } from './common/constants/security.constants';
-import { getUploadRoot } from './files/file-storage.service';
 import { fileStorageConfig } from './config/file-storage.config';
+import { getUploadRoot } from './files/file-storage.util';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);

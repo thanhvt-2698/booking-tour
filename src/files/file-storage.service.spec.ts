@@ -1,7 +1,8 @@
 import { BadRequestException, Logger } from '@nestjs/common';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { MAX_IMAGE_SIZE_BYTES } from './constants/file.constants';
-import { FileStorageService, getUploadRoot } from './file-storage.service';
+import { FileStorageService } from './file-storage.service';
+import { getUploadRoot } from './file-storage.util';
 import type { UploadedImage } from './interfaces/uploaded-image.interface';
 
 jest.mock('node:fs/promises', () => ({

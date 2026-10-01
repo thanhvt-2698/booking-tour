@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
-import { extname, join, resolve } from 'node:path';
+import { extname, join } from 'node:path';
 import { fileStorageConfig } from '../config/file-storage.config';
+import { getUploadRoot } from './file-storage.util';
 import {
   FILE_NOT_FOUND_CODE,
   FILE_STORAGE_ERROR_KEYS,
@@ -19,7 +20,6 @@ import {
   MAX_IMAGE_ORIGINAL_NAME_LENGTH,
   MINIMUM_IMAGE_SIZE_BYTES,
   TOUR_IMAGE_MIME_TYPES,
-  UPLOAD_DIRECTORY_NAME,
   UPLOAD_URL_PREFIX,
   UNKNOWN_ERROR_NAME,
   WEBP_FORMAT_SIGNATURE_OFFSET,
@@ -27,11 +27,7 @@ import {
 import type { StoredImage } from './interfaces/stored-image.interface';
 import type { UploadedImage } from './interfaces/uploaded-image.interface';
 
-export type ImageFolder = keyof typeof fileStorageConfig.folders;
-
-export function getUploadRoot(): string {
-  return resolve(process.cwd(), UPLOAD_DIRECTORY_NAME);
-}
+type ImageFolder = keyof typeof fileStorageConfig.folders;
 
 @Injectable()
 export class FileStorageService {

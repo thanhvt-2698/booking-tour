@@ -8,10 +8,8 @@ import type { Repository } from 'typeorm';
 import { access, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { static as serveStatic } from 'express';
-import {
-  FileStorageService,
-  getUploadRoot,
-} from '../src/files/file-storage.service';
+import { FileStorageService } from '../src/files/file-storage.service';
+import { getUploadRoot } from '../src/files/file-storage.util';
 import { MAX_TOUR_IMAGE_COUNT } from '../src/tours/constants/tour.constants';
 import { TourImageEntity } from '../src/files/entities/tour-image.entity';
 import { AppModule } from '../src/app.module';
