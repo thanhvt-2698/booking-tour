@@ -28,6 +28,16 @@ import { NotificationsService } from '../src/notifications/notifications.service
 describe('Scheduler (e2e)', () => {
   const requireFromSchedulerE2e = createRequire(__filename);
   const TEST_SCHEDULER_BATCH_SIZE = 2;
+  const E2E_EXPIRY_BOOKING_IDS = [
+    '00000000-0000-4000-8000-000000000001',
+    '00000000-0000-4000-8000-000000000002',
+    '00000000-0000-4000-8000-000000000003',
+  ] as const;
+  const E2E_REMINDER_BOOKING_IDS = [
+    '00000000-0000-4000-8000-000000000011',
+    '00000000-0000-4000-8000-000000000012',
+    '00000000-0000-4000-8000-000000000013',
+  ] as const;
   let app: INestApplication;
   let bookingsRepository: Repository<BookingEntity>;
   let categoriesRepository: Repository<CategoryEntity>;
@@ -281,6 +291,76 @@ describe('Scheduler (e2e)', () => {
     });
   });
 
+  it('pages past a full batch of corrupt pending bookings to expire a later valid booking', async () => {
+    const now = new Date('2035-06-01T12:00:00.000Z');
+    const cutoff = new Date(
+      now.getTime() - DEFAULT_BOOKING_PENDING_TTL_HOURS * MILLISECONDS_PER_HOUR,
+    );
+    const corruptDepartureOne = await createDeparture({
+      bookedSeats: 0,
+      endAt: new Date('2035-06-07T12:00:00.000Z'),
+      startAt: new Date('2035-06-06T12:00:00.000Z'),
+    });
+    const corruptDepartureTwo = await createDeparture({
+      bookedSeats: 0,
+      endAt: new Date('2035-06-07T12:00:00.000Z'),
+      startAt: new Date('2035-06-06T12:00:00.000Z'),
+    });
+    const validDeparture = await createDeparture({
+      bookedSeats: 1,
+      endAt: new Date('2035-06-07T12:00:00.000Z'),
+      startAt: new Date('2035-06-06T12:00:00.000Z'),
+    });
+    const corruptBookingOne = await createBooking({
+      createdAt: cutoff,
+      departureId: corruptDepartureOne.id,
+      id: E2E_EXPIRY_BOOKING_IDS[0],
+      quantity: 1,
+      status: BookingStatus.PENDING,
+    });
+    const corruptBookingTwo = await createBooking({
+      createdAt: cutoff,
+      departureId: corruptDepartureTwo.id,
+      id: E2E_EXPIRY_BOOKING_IDS[1],
+      quantity: 1,
+      status: BookingStatus.PENDING,
+    });
+    const validBooking = await createBooking({
+      createdAt: cutoff,
+      departureId: validDeparture.id,
+      id: E2E_EXPIRY_BOOKING_IDS[2],
+      quantity: 1,
+      status: BookingStatus.PENDING,
+    });
+
+    const firstRun = await schedulerService.runDueJobs(now);
+    const secondRun = await schedulerService.runDueJobs(now);
+
+    const savedValidBooking = await bookingsRepository.findOne({
+      select: ['id', 'status'],
+      where: { id: validBooking.id },
+    });
+    const savedValidDeparture = await departuresRepository.findOne({
+      select: ['id', 'bookedSeats'],
+      where: { id: validDeparture.id },
+    });
+
+    expect(firstRun).toMatchObject({
+      bookingsExpired: 0,
+      bookingsFailedExpiry: 2,
+      bookingsScannedForExpiry: 2,
+    });
+    expect(secondRun).toMatchObject({
+      bookingsExpired: 1,
+      bookingsFailedExpiry: 0,
+      bookingsScannedForExpiry: 1,
+    });
+    expect(corruptBookingOne.status).toBe(BookingStatus.PENDING);
+    expect(corruptBookingTwo.status).toBe(BookingStatus.PENDING);
+    expect(savedValidBooking?.status).toBe(BookingStatus.CANCELLED);
+    expect(savedValidDeparture?.bookedSeats).toBe(0);
+  });
+
   it('pages through reminders, includes the 24-hour boundary, and delegates deduplication', async () => {
     const now = new Date('2035-06-01T12:00:00.000Z');
     const insideWindowDeparture = await createDeparture({
@@ -375,6 +455,62 @@ describe('Scheduler (e2e)', () => {
     );
   });
 
+  it('continues after a reminder error, advances the cursor, and dispatches pending outbox rows', async () => {
+    const now = new Date('2035-06-01T12:00:00.000Z');
+    const departures = await Promise.all(
+      E2E_REMINDER_BOOKING_IDS.map(() =>
+        createDeparture({
+          endAt: new Date('2035-06-05T12:00:00.000Z'),
+          startAt: new Date(now.getTime() + MILLISECONDS_PER_HOUR),
+        }),
+      ),
+    );
+    const reminderBookings = await Promise.all(
+      E2E_REMINDER_BOOKING_IDS.map((id, index) =>
+        createBooking({
+          createdAt: new Date('2035-05-01T00:00:00.000Z'),
+          departureId: departures[index].id,
+          id,
+          status: BookingStatus.APPROVED,
+        }),
+      ),
+    );
+    notificationServiceMock.scheduleReminder.mockImplementation(
+      (bookingId: string): Promise<void> => {
+        reminderScheduleCalls.push(bookingId);
+        if (bookingId === reminderBookings[0].id) {
+          return Promise.reject(new Error('temporary reminder outbox failure'));
+        }
+
+        remindersSubmittedToFakeQueue.add(bookingId);
+        return Promise.resolve();
+      },
+    );
+
+    const firstRun = await schedulerService.runDueJobs(now);
+    const secondRun = await schedulerService.runDueJobs(now);
+
+    const expectedBookingIds = reminderBookings.map(({ id }) => id);
+    expect(firstRun).toMatchObject({
+      remindersFailed: 1,
+      remindersScanned: TEST_SCHEDULER_BATCH_SIZE,
+      remindersSubmitted: 1,
+    });
+    expect(secondRun).toMatchObject({
+      remindersFailed: 0,
+      remindersScanned: 1,
+      remindersSubmitted: 1,
+    });
+    expect(reminderScheduleCalls).toEqual(expectedBookingIds);
+    expect(remindersSubmittedToFakeQueue).toEqual(
+      new Set(expectedBookingIds.slice(1)),
+    );
+    expect(notificationServiceMock.dispatchPending).toHaveBeenCalledTimes(2);
+    expect(notificationServiceMock.dispatchPending).toHaveBeenLastCalledWith(
+      now,
+    );
+  });
+
   async function createDeparture(input: {
     bookingDeadline?: Date | null;
     bookedSeats?: number;
@@ -398,6 +534,7 @@ describe('Scheduler (e2e)', () => {
   async function createBooking(input: {
     createdAt: Date;
     departureId: string;
+    id?: string;
     quantity?: number;
     status: BookingStatus;
   }): Promise<BookingEntity> {
@@ -410,6 +547,7 @@ describe('Scheduler (e2e)', () => {
         createdAt: input.createdAt,
         currency: 'USD',
         departureId: input.departureId,
+        id: input.id,
         idempotencyKey: null,
         quantity: input.quantity ?? 1,
         status: input.status,

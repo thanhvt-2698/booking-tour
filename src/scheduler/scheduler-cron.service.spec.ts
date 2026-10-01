@@ -17,6 +17,7 @@ const EMPTY_SCHEDULER_RUN_SUMMARY: SchedulerRunSummary = {
   departuresCompleted: 0,
   departuresScannedForCompletion: 0,
   notificationsDispatched: 0,
+  remindersFailed: 0,
   remindersScanned: 0,
   remindersSubmitted: 0,
 };

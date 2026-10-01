@@ -22,6 +22,12 @@ export const SCHEDULER_BATCH_LOG_EVENT = 'scheduler_batch_completed';
 export const SCHEDULER_FAILURE_LOG_EVENT = 'scheduler_run_failed';
 export const SCHEDULER_BOOKING_EXPIRY_FAILURE_LOG_EVENT =
   'scheduler_booking_expiry_failed';
+export const SCHEDULER_BOOKING_REMINDER_FAILURE_LOG_EVENT =
+  'scheduler_booking_reminder_failed';
+export const SCHEDULER_UNKNOWN_ERROR_NAME = 'UnknownError';
+export const SCHEDULER_BOOKING_ID_CURSOR_CONDITION =
+  'booking.id > :afterBookingId';
+export const SCHEDULER_BOOKING_ID_ORDER_FIELD = 'booking.id';
 
 export const BOOKING_PENDING_EXPIRY_REASON =
   'Pending booking expired after the approval waiting period';

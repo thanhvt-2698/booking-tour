@@ -17,6 +17,7 @@ import {
   BOOKING_NOTIFICATION_QUEUE,
   BOOKING_NOTIFICATION_BLOCKING_JOB_STATES,
   BOOKING_NOTIFICATION_DISPATCH_FAILED_EVENT,
+  BOOKING_NOTIFICATION_JOB_FIELDS,
   BOOKING_REMINDER_NOTIFICATION_JOB,
   BOOKING_REMINDER_NOTIFICATION_JOB_ID_PREFIX,
   BOOKING_STATUS_NOTIFICATION_JOB,
@@ -282,6 +283,6 @@ export class NotificationsService implements OnModuleInit {
   private isLegacyStatusJob(
     jobData: BookingNotificationJob,
   ): jobData is LegacyBookingStatusNotificationJob {
-    return 'status' in jobData;
+    return BOOKING_NOTIFICATION_JOB_FIELDS.status in jobData;
   }
 }

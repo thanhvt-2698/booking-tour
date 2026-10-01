@@ -22,7 +22,10 @@ import {
   MILLISECONDS_PER_HOUR,
   SCHEDULER_BATCH_LOG_EVENT,
   SCHEDULER_BATCH_SIZE_CONFIG_KEY,
+  SCHEDULER_BOOKING_ID_CURSOR_CONDITION,
+  SCHEDULER_BOOKING_ID_ORDER_FIELD,
   SCHEDULER_BOOKING_EXPIRY_FAILURE_LOG_EVENT,
+  SCHEDULER_BOOKING_REMINDER_FAILURE_LOG_EVENT,
   SCHEDULER_BOOKING_LOCK_QUERY_FIELDS,
   SCHEDULER_COMPLETABLE_DEPARTURE_QUERY_FIELDS,
   SCHEDULER_DEPARTURE_LOCK_QUERY_FIELDS,
@@ -30,12 +33,14 @@ import {
   SCHEDULER_PENDING_BOOKING_QUERY_FIELDS,
   SCHEDULER_REMINDER_ELIGIBLE_DEPARTURE_STATUSES,
   SCHEDULER_REMINDER_QUERY_FIELDS,
+  SCHEDULER_UNKNOWN_ERROR_NAME,
 } from './constants/scheduler.constants';
 import type { SchedulerRunSummary } from './interfaces/scheduler-run-summary.interface';
 
 @Injectable()
 export class SchedulerService {
-  // The cursor gives one scheduler replica fair keyset paging; it is not a distributed lock.
+  // These cursors give one scheduler replica fair keyset paging; they are not distributed locks.
+  private pendingExpiryCursorBookingId: string | undefined;
   private reminderCursorBookingId: string | undefined;
 
   constructor(
@@ -83,6 +88,7 @@ export class SchedulerService {
       departuresCompleted: departuresCompleted.updated,
       departuresScannedForCompletion: departuresCompleted.scanned,
       notificationsDispatched,
+      remindersFailed: reminders.failed,
       remindersScanned: reminders.scanned,
       remindersSubmitted: reminders.submitted,
     };
@@ -174,17 +180,16 @@ export class SchedulerService {
     cutoff: Date,
     batchSize: number,
   ): Promise<{ failed: number; scanned: number; updated: number }> {
-    const bookings = await this.bookingsRepository
-      .createQueryBuilder('booking')
-      .select(SCHEDULER_PENDING_BOOKING_QUERY_FIELDS)
-      .where('booking.status = :pendingStatus', {
-        pendingStatus: BookingStatus.PENDING,
-      })
-      .andWhere('booking.createdAt <= :cutoff', { cutoff })
-      .orderBy('booking.createdAt', 'ASC')
-      .addOrderBy('booking.id', 'ASC')
-      .take(batchSize)
-      .getMany();
+    let bookings = await this.findPendingExpiryBookings(
+      cutoff,
+      batchSize,
+      this.pendingExpiryCursorBookingId,
+    );
+
+    if (bookings.length === 0 && this.pendingExpiryCursorBookingId) {
+      this.pendingExpiryCursorBookingId = undefined;
+      bookings = await this.findPendingExpiryBookings(cutoff, batchSize);
+    }
 
     let updated = 0;
     let failed = 0;
@@ -198,16 +203,45 @@ export class SchedulerService {
         Logger.error(
           {
             bookingId: booking.id,
-            errorName: error instanceof Error ? error.name : 'UnknownError',
+            errorName:
+              error instanceof Error
+                ? error.name
+                : SCHEDULER_UNKNOWN_ERROR_NAME,
             event: SCHEDULER_BOOKING_EXPIRY_FAILURE_LOG_EVENT,
           },
           undefined,
           SchedulerService.name,
         );
+      } finally {
+        this.pendingExpiryCursorBookingId = booking.id;
       }
     }
 
     return { failed, scanned: bookings.length, updated };
+  }
+
+  private findPendingExpiryBookings(
+    cutoff: Date,
+    batchSize: number,
+    afterBookingId?: string,
+  ): Promise<BookingEntity[]> {
+    const query = this.bookingsRepository
+      .createQueryBuilder('booking')
+      .select(SCHEDULER_PENDING_BOOKING_QUERY_FIELDS)
+      .where('booking.status = :pendingStatus', {
+        pendingStatus: BookingStatus.PENDING,
+      })
+      .andWhere('booking.createdAt <= :cutoff', { cutoff })
+      .orderBy(SCHEDULER_BOOKING_ID_ORDER_FIELD, 'ASC')
+      .take(batchSize);
+
+    if (afterBookingId) {
+      query.andWhere(SCHEDULER_BOOKING_ID_CURSOR_CONDITION, {
+        afterBookingId,
+      });
+    }
+
+    return query.getMany();
   }
 
   private async expirePendingBooking(
@@ -272,7 +306,7 @@ export class SchedulerService {
     now: Date,
     windowEnd: Date,
     batchSize: number,
-  ): Promise<{ scanned: number; submitted: number }> {
+  ): Promise<{ failed: number; scanned: number; submitted: number }> {
     let bookings = await this.findUpcomingReminderBookings(
       now,
       windowEnd,
@@ -289,19 +323,36 @@ export class SchedulerService {
       );
     }
 
+    let submitted = 0;
+    let failed = 0;
     for (const booking of bookings) {
-      await this.notificationsService.scheduleReminder(
-        booking.id,
-        booking.departure.startAt,
-        now,
-      );
+      try {
+        await this.notificationsService.scheduleReminder(
+          booking.id,
+          booking.departure.startAt,
+          now,
+        );
+        submitted += 1;
+      } catch (error: unknown) {
+        failed += 1;
+        Logger.error(
+          {
+            bookingId: booking.id,
+            errorName:
+              error instanceof Error
+                ? error.name
+                : SCHEDULER_UNKNOWN_ERROR_NAME,
+            event: SCHEDULER_BOOKING_REMINDER_FAILURE_LOG_EVENT,
+          },
+          undefined,
+          SchedulerService.name,
+        );
+      } finally {
+        this.reminderCursorBookingId = booking.id;
+      }
     }
 
-    if (bookings.length > 0) {
-      this.reminderCursorBookingId = bookings[bookings.length - 1].id;
-    }
-
-    return { scanned: bookings.length, submitted: bookings.length };
+    return { failed, scanned: bookings.length, submitted };
   }
 
   private findUpcomingReminderBookings(
@@ -323,11 +374,13 @@ export class SchedulerService {
       })
       .andWhere('departure.startAt > :now', { now })
       .andWhere('departure.startAt <= :windowEnd', { windowEnd })
-      .orderBy('booking.id', 'ASC')
+      .orderBy(SCHEDULER_BOOKING_ID_ORDER_FIELD, 'ASC')
       .take(batchSize);
 
     if (afterBookingId) {
-      query.andWhere('booking.id > :afterBookingId', { afterBookingId });
+      query.andWhere(SCHEDULER_BOOKING_ID_CURSOR_CONDITION, {
+        afterBookingId,
+      });
     }
 
     return query.getMany();

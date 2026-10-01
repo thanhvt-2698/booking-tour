@@ -97,6 +97,6 @@ npm run scheduler:run
 npm run notifications:retry
 ```
 
-Reminder được kiểm tra lại trước khi gửi; không gửi cho lịch bị hủy, đã qua hoặc bị đổi thời gian. `MAIL_ENABLED=false` đánh dấu notification đã bỏ qua, không tự gửi lại khi bật mail về sau. Outbox và job ID giảm gửi trùng; SMTP có thể gửi lại nếu process dừng sau khi SMTP nhận email nhưng trước khi lưu trạng thái đã xử lý. Cấu hình một replica chạy scheduler; cursor reminder hiện nằm trong bộ nhớ process.
+Reminder được kiểm tra lại trước khi gửi; không gửi cho lịch bị hủy, đã qua hoặc bị đổi thời gian. `MAIL_ENABLED=false` đánh dấu notification đã bỏ qua, không tự gửi lại khi bật mail về sau. Outbox và job ID giảm gửi trùng; SMTP có thể gửi lại nếu process dừng sau khi SMTP nhận email nhưng trước khi lưu trạng thái đã xử lý. Cursor paging cho expiry và reminder nằm trong bộ nhớ process; lỗi xử lý một booking được ghi log, cursor tiếp tục qua batch và booking lỗi được thử lại sau khi cursor quay vòng. Cấu hình một replica chạy scheduler; cursor không phối hợp giữa nhiều replica.
 
 Các service transaction sử dụng repository từ cùng `EntityManager` để booking, số chỗ, history và outbox commit/rollback cùng nhau. SunLint C033 có thể cảnh báo các thao tác ORM này; dùng repository toàn cục thay cho repository của transaction sẽ làm mất tính nguyên tử. Các warning này cần được review theo thiết kế transaction, không tắt rule hay thêm directive bypass.

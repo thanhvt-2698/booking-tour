@@ -8,5 +8,6 @@ export interface SchedulerRunSummary {
   departuresScannedForCompletion: number;
   notificationsDispatched: number;
   remindersSubmitted: number;
+  remindersFailed: number;
   remindersScanned: number;
 }

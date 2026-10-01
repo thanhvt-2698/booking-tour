@@ -13,7 +13,9 @@ import {
   DEFAULT_BOOKING_PENDING_TTL_HOURS,
   DEFAULT_SCHEDULER_BATCH_SIZE,
   MILLISECONDS_PER_HOUR,
+  SCHEDULER_BOOKING_ID_CURSOR_CONDITION,
   SCHEDULER_BOOKING_EXPIRY_FAILURE_LOG_EVENT,
+  SCHEDULER_BOOKING_REMINDER_FAILURE_LOG_EVENT,
   SCHEDULER_BATCH_SIZE_CONFIG_KEY,
 } from './constants/scheduler.constants';
 import { SchedulerService } from './scheduler.service';
@@ -316,6 +318,189 @@ describe('SchedulerService', () => {
     loggerErrorSpy.mockRestore();
   });
 
+  it('pages past a full batch of failed expiries so later bookings still expire', async () => {
+    const now = new Date('2035-06-01T12:00:00.000Z');
+    const cutoff = new Date(
+      now.getTime() - DEFAULT_BOOKING_PENDING_TTL_HOURS * MILLISECONDS_PER_HOUR,
+    );
+    const firstBooking = createPendingBooking(
+      '00000000-0000-4000-8000-000000000001',
+      cutoff,
+      'departure-with-no-seats-one',
+    );
+    const secondBooking = createPendingBooking(
+      '00000000-0000-4000-8000-000000000002',
+      cutoff,
+      'departure-with-no-seats-two',
+    );
+    const laterBooking = createPendingBooking(
+      '00000000-0000-4000-8000-000000000003',
+      cutoff,
+      'departure-with-seats',
+    );
+    const firstPage = createFakeQueryBuilder({
+      many: [{ id: firstBooking.id }, { id: secondBooking.id }],
+    });
+    const secondPage = createFakeQueryBuilder({
+      many: [{ id: laterBooking.id }],
+    });
+    const emptyPageAfterCursor = createFakeQueryBuilder();
+    const wrappedFirstPage = createFakeQueryBuilder({
+      many: [{ id: firstBooking.id }, { id: secondBooking.id }],
+    });
+    const loggerErrorSpy = jest
+      .spyOn(Logger, 'error')
+      .mockImplementation(() => undefined);
+    const harness = createSchedulerServiceHarness({
+      batchSize: 2,
+      bookingQueryBuilders: [
+        firstPage,
+        createFakeQueryBuilder(),
+        secondPage,
+        createFakeQueryBuilder(),
+        emptyPageAfterCursor,
+        wrappedFirstPage,
+        createFakeQueryBuilder(),
+      ],
+      lockedBookingQueryBuilders: [
+        createFakeQueryBuilder({ one: firstBooking }),
+        createFakeQueryBuilder({ one: secondBooking }),
+        createFakeQueryBuilder({ one: laterBooking }),
+        createFakeQueryBuilder({ one: firstBooking }),
+        createFakeQueryBuilder({ one: secondBooking }),
+      ],
+      lockedDepartureQueryBuilders: [
+        createFakeQueryBuilder({
+          one: { bookedSeats: 0, id: firstBooking.departureId },
+        }),
+        createFakeQueryBuilder({
+          one: { bookedSeats: 0, id: secondBooking.departureId },
+        }),
+        createFakeQueryBuilder({
+          one: { bookedSeats: 1, id: laterBooking.departureId },
+        }),
+        createFakeQueryBuilder({
+          one: { bookedSeats: 0, id: firstBooking.departureId },
+        }),
+        createFakeQueryBuilder({
+          one: { bookedSeats: 0, id: secondBooking.departureId },
+        }),
+      ],
+    });
+
+    const firstRun = await harness.schedulerService.runDueJobs(now);
+    const secondRun = await harness.schedulerService.runDueJobs(now);
+    const wrappedRun = await harness.schedulerService.runDueJobs(now);
+
+    expect(firstRun).toMatchObject({
+      bookingsExpired: 0,
+      bookingsFailedExpiry: 2,
+      bookingsScannedForExpiry: 2,
+    });
+    expect(secondRun).toMatchObject({
+      bookingsExpired: 1,
+      bookingsFailedExpiry: 0,
+      bookingsScannedForExpiry: 1,
+    });
+    expect(wrappedRun).toMatchObject({
+      bookingsExpired: 0,
+      bookingsFailedExpiry: 2,
+      bookingsScannedForExpiry: 2,
+    });
+    expect(firstPage.orderBy.mock.calls).toContainEqual(['booking.id', 'ASC']);
+    expect(secondPage.andWhere.mock.calls).toContainEqual([
+      SCHEDULER_BOOKING_ID_CURSOR_CONDITION,
+      { afterBookingId: secondBooking.id },
+    ]);
+    expect(emptyPageAfterCursor.andWhere.mock.calls).toContainEqual([
+      SCHEDULER_BOOKING_ID_CURSOR_CONDITION,
+      { afterBookingId: laterBooking.id },
+    ]);
+    expect(
+      wrappedFirstPage.andWhere.mock.calls.filter(
+        ([condition]) => condition === SCHEDULER_BOOKING_ID_CURSOR_CONDITION,
+      ),
+    ).toHaveLength(0);
+    expect(firstBooking.status).toBe(BookingStatus.PENDING);
+    expect(secondBooking.status).toBe(BookingStatus.PENDING);
+    expect(laterBooking.status).toBe(BookingStatus.CANCELLED);
+    expect(harness.notifications.dispatchPending.mock.calls).toHaveLength(3);
+    expect(loggerErrorSpy.mock.calls).toHaveLength(4);
+    loggerErrorSpy.mockRestore();
+  });
+
+  it('logs reminder failures, advances the cursor, and still dispatches outbox rows', async () => {
+    const now = new Date('2035-06-01T12:00:00.000Z');
+    const firstBooking = createReminderBooking('booking-reminder-1', now);
+    const secondBooking = createReminderBooking('booking-reminder-2', now);
+    const thirdBooking = createReminderBooking('booking-reminder-3', now);
+    const firstPage = createFakeQueryBuilder({
+      many: [firstBooking, secondBooking],
+    });
+    const secondPage = createFakeQueryBuilder({ many: [thirdBooking] });
+    const loggerErrorSpy = jest
+      .spyOn(Logger, 'error')
+      .mockImplementation(() => undefined);
+    const harness = createSchedulerServiceHarness({
+      batchSize: 2,
+      bookingQueryBuilders: [
+        createFakeQueryBuilder(),
+        firstPage,
+        createFakeQueryBuilder(),
+        secondPage,
+      ],
+    });
+    harness.notifications.scheduleReminder.mockImplementation((bookingId) =>
+      bookingId === firstBooking.id
+        ? Promise.reject(new Error('temporary reminder outbox failure'))
+        : Promise.resolve(),
+    );
+
+    const firstRun = await harness.schedulerService.runDueJobs(now);
+    const secondRun = await harness.schedulerService.runDueJobs(now);
+
+    expect(firstRun).toMatchObject({
+      remindersFailed: 1,
+      remindersScanned: 2,
+      remindersSubmitted: 1,
+    });
+    expect(secondRun).toMatchObject({
+      remindersFailed: 0,
+      remindersScanned: 1,
+      remindersSubmitted: 1,
+    });
+    for (const [index, booking] of [
+      firstBooking,
+      secondBooking,
+      thirdBooking,
+    ].entries()) {
+      expect(harness.notifications.scheduleReminder).toHaveBeenNthCalledWith(
+        index + 1,
+        booking.id,
+        booking.departure.startAt,
+        now,
+      );
+    }
+    expect(secondPage.andWhere.mock.calls).toContainEqual([
+      SCHEDULER_BOOKING_ID_CURSOR_CONDITION,
+      { afterBookingId: secondBooking.id },
+    ]);
+    expect(harness.notifications.dispatchPending.mock.calls).toEqual([
+      [now],
+      [now],
+    ]);
+    expect(loggerErrorSpy.mock.calls).toContainEqual([
+      {
+        bookingId: firstBooking.id,
+        errorName: 'Error',
+        event: SCHEDULER_BOOKING_REMINDER_FAILURE_LOG_EVENT,
+      },
+      undefined,
+      SchedulerService.name,
+    ]);
+    loggerErrorSpy.mockRestore();
+  });
+
   it('pages reminder candidates across runs and wraps the keyset cursor', async () => {
     const now = new Date('2035-06-01T12:00:00.000Z');
     const bookingOne = createReminderBooking('booking-1', now);
@@ -358,11 +543,11 @@ describe('SchedulerService', () => {
       [bookingTwo.id, bookingTwo.departure.startAt, now],
     ]);
     expect(reminderQueries[1].andWhere.mock.calls).toContainEqual([
-      'booking.id > :afterBookingId',
+      SCHEDULER_BOOKING_ID_CURSOR_CONDITION,
       { afterBookingId: bookingTwo.id },
     ]);
     expect(reminderQueries[2].andWhere.mock.calls).toContainEqual([
-      'booking.id > :afterBookingId',
+      SCHEDULER_BOOKING_ID_CURSOR_CONDITION,
       { afterBookingId: bookingThree.id },
     ]);
     expect(harness.notifications.dispatchPending.mock.calls).toHaveLength(3);
@@ -405,6 +590,21 @@ function createReminderBooking(id: string, now: Date): BookingEntity {
       startAt: new Date(now.getTime() + MILLISECONDS_PER_HOUR),
     },
     id,
+  });
+}
+
+function createPendingBooking(
+  id: string,
+  createdAt: Date,
+  departureId: string,
+): BookingEntity {
+  return Object.assign(new BookingEntity(), {
+    cancelReason: null,
+    createdAt,
+    departureId,
+    id,
+    quantity: 1,
+    status: BookingStatus.PENDING,
   });
 }
 
