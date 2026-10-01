@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, StreamableFile } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { readFile } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import type { Repository } from 'typeorm';
 import { FileStorageService } from '../files/file-storage.service';
 import {
@@ -48,7 +48,8 @@ export class ReviewImagesService {
     }
 
     try {
-      return new StreamableFile(await readFile(path), {
+      const file = await open(path, 'r');
+      return new StreamableFile(file.createReadStream({ autoClose: true }), {
         type: image.mimeType,
       });
     } catch (error: unknown) {

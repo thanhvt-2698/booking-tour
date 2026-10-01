@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { readFile } from 'node:fs/promises';
+import { open, type FileHandle } from 'node:fs/promises';
+import { Readable } from 'node:stream';
 import type { Repository } from 'typeorm';
 import type { FileStorageService } from '../files/file-storage.service';
 import { TourStatus } from '../tours/constants/tour.constants';
@@ -10,11 +11,13 @@ import {
 import type { ReviewImageEntity } from './entities/review-image.entity';
 import { ReviewImagesService } from './review-images.service';
 
-jest.mock('node:fs/promises', () => ({ readFile: jest.fn() }));
+jest.mock('node:fs/promises', () => ({ open: jest.fn() }));
 
 describe('ReviewImagesService', () => {
   let service: ReviewImagesService;
   let getPath: jest.Mock;
+  let createReadStream: jest.Mock;
+  let fileStream: Readable;
   let query: Record<string, jest.Mock>;
   const filename = '3a1c36f9-8138-456f-b174-4cfcb0d0ea1e.png';
 
@@ -28,7 +31,11 @@ describe('ReviewImagesService', () => {
       where: jest.fn().mockReturnThis(),
     };
     getPath = jest.fn().mockReturnValue('/uploads/reviews/photo.png');
-    jest.mocked(readFile).mockResolvedValue(Buffer.from('image-data'));
+    fileStream = Readable.from([]);
+    createReadStream = jest.fn().mockReturnValue(fileStream);
+    jest.mocked(open).mockResolvedValue({
+      createReadStream,
+    } as unknown as FileHandle);
     service = new ReviewImagesService(
       {
         createQueryBuilder: jest.fn().mockReturnValue(query),
@@ -40,7 +47,10 @@ describe('ReviewImagesService', () => {
   it('loads only public images of a published review and tour using bounded fields', async () => {
     const file = await service.download(filename);
     expect(file.getHeaders().type).toBe('image/png');
+    expect(file.getStream()).toBe(fileStream);
     expect(getPath).toHaveBeenCalledWith(`reviews/${filename}`);
+    expect(open).toHaveBeenCalledWith('/uploads/reviews/photo.png', 'r');
+    expect(createReadStream).toHaveBeenCalledWith({ autoClose: true });
     expect(query.select).toHaveBeenCalledWith([
       ...REVIEW_IMAGE_DOWNLOAD_FIELDS,
     ]);
@@ -56,7 +66,6 @@ describe('ReviewImagesService', () => {
     expect(query.andWhere).toHaveBeenCalledWith('tour.status = :tourStatus', {
       tourStatus: TourStatus.PUBLISHED,
     });
-    expect(readFile).toHaveBeenCalledWith('/uploads/reviews/photo.png');
   });
 
   it('does not read files when the review image is hidden, deleted or missing', async () => {
@@ -64,7 +73,7 @@ describe('ReviewImagesService', () => {
     await expect(service.download(filename)).rejects.toBeInstanceOf(
       NotFoundException,
     );
-    expect(readFile).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('rejects malformed keys before querying the database', async () => {
@@ -75,11 +84,11 @@ describe('ReviewImagesService', () => {
       BadRequestException,
     );
     expect(query.getOne).not.toHaveBeenCalled();
-    expect(readFile).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('returns not found if image metadata exists but its file is missing', async () => {
-    jest.mocked(readFile).mockRejectedValue({ code: 'ENOENT' });
+    jest.mocked(open).mockRejectedValue({ code: 'ENOENT' });
     await expect(service.download(filename)).rejects.toBeInstanceOf(
       NotFoundException,
     );
@@ -89,7 +98,7 @@ describe('ReviewImagesService', () => {
     const error = Object.assign(new Error('Cannot read image'), {
       code: 'EACCES',
     });
-    jest.mocked(readFile).mockRejectedValue(error);
+    jest.mocked(open).mockRejectedValue(error);
     await expect(service.download(filename)).rejects.toBe(error);
   });
 });
