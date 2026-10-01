@@ -34,6 +34,10 @@ export const REVIEW_PUBLIC_QUERY_FIELDS = [
   'review.tourId',
   'review.updatedAt',
 ] as const;
+export const REVIEW_ADMIN_QUERY_FIELDS = [
+  ...REVIEW_PUBLIC_QUERY_FIELDS,
+  'review.userId',
+] as const;
 export const REVIEW_MANAGEMENT_QUERY_FIELDS = [
   'body',
   'createdAt',

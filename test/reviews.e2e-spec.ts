@@ -7,11 +7,13 @@ import { DataSource, Repository } from 'typeorm';
 import { AppModule } from '../src/app.module';
 import { BookingStatus } from '../src/bookings/constants/booking.constants';
 import { BookingEntity } from '../src/bookings/entities/booking.entity';
+import { MAX_PAGE_SIZE } from '../src/common/constants/app.constants';
 import { CategoryStatus } from '../src/categories/constants/category.constants';
 import { CategoryEntity } from '../src/categories/entities/category.entity';
 import { ReviewStatus } from '../src/reviews/constants/review.constants';
 import { ReviewEntity } from '../src/reviews/entities/review.entity';
 import { ReviewImageEntity } from '../src/reviews/entities/review-image.entity';
+import type { AdminReviewList } from '../src/reviews/interfaces/admin-review-list.interface';
 import { FileStorageService } from '../src/files/file-storage.service';
 import { DepartureStatus } from '../src/tours/constants/departure.constants';
 import { TourStatus } from '../src/tours/constants/tour.constants';
@@ -50,13 +52,14 @@ describe('Tour reviews (e2e)', () => {
   const createBooking = async (
     user: UserEntity,
     bookingCode: string,
+    departureId = departure.id,
   ): Promise<BookingEntity> =>
     bookingsRepository.save(
       bookingsRepository.create({
         bookingCode,
         cancelReason: null,
         currency: 'VND',
-        departureId: departure.id,
+        departureId,
         idempotencyKey: null,
         quantity: 1,
         status: BookingStatus.APPROVED,
@@ -71,6 +74,7 @@ describe('Tour reviews (e2e)', () => {
     booking: BookingEntity,
     body: string,
     status = ReviewStatus.PUBLISHED,
+    reviewTour: TourEntity = tour,
   ): Promise<ReviewEntity> =>
     reviewsRepository.save(
       reviewsRepository.create({
@@ -78,7 +82,7 @@ describe('Tour reviews (e2e)', () => {
         bookingId: booking.id,
         rating: 5,
         status,
-        tourId: tour.id,
+        tourId: reviewTour.id,
         userId: user.id,
       }),
     );
@@ -624,5 +628,289 @@ describe('Tour reviews (e2e)', () => {
       .set('Authorization', `Bearer ${tokenFor(owner)}`)
       .send({ unknownField: true })
       .expect(400);
+  });
+
+  it('lists admin reviews with filters, stable pagination, public fields and all statuses', async () => {
+    const publishedReview = await createReview(
+      owner,
+      ownerBooking,
+      'Published review',
+      ReviewStatus.PUBLISHED,
+    );
+    const hiddenReview = await createReview(
+      otherUser,
+      otherBooking,
+      'Hidden review',
+      ReviewStatus.HIDDEN,
+    );
+    const deletedReview = await createReview(
+      hiddenUser,
+      hiddenBooking,
+      'Deleted review',
+      ReviewStatus.DELETED,
+    );
+    const otherTour = await toursRepository.save(
+      toursRepository.create({
+        basePrice: '1200.00',
+        categoryId: tour.categoryId,
+        code: 'REVIEW-OTHER-TOUR',
+        createdBy: admin.id,
+        currency: 'VND',
+        description: 'Second tour for admin review filters',
+        slug: 'review-other-tour',
+        status: TourStatus.PUBLISHED,
+        title: 'Other review tour',
+      }),
+    );
+    const otherDeparture = await departuresRepository.save(
+      departuresRepository.create({
+        bookingDeadline: null,
+        bookedSeats: 1,
+        capacity: 2,
+        endAt: new Date('2020-02-02T00:00:00.000Z'),
+        startAt: new Date('2020-02-01T00:00:00.000Z'),
+        status: DepartureStatus.COMPLETED,
+        tourId: otherTour.id,
+      }),
+    );
+    const otherTourBooking = await createBooking(
+      otherUser,
+      'REV-OTHER-TOUR',
+      otherDeparture.id,
+    );
+    const otherTourReview = await createReview(
+      otherUser,
+      otherTourBooking,
+      'Hidden review on another tour',
+      ReviewStatus.HIDDEN,
+      otherTour,
+    );
+    const sameCreatedAt = new Date('2025-05-06T07:08:09.000Z');
+    const reviews = [
+      publishedReview,
+      hiddenReview,
+      deletedReview,
+      otherTourReview,
+    ];
+    await Promise.all(
+      reviews.map((review) =>
+        reviewsRepository.update(review.id, { createdAt: sameCreatedAt }),
+      ),
+    );
+    const expectedPageOrder = [...reviews].sort((left, right) =>
+      right.id.localeCompare(left.id),
+    );
+    const imageFileName = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.png';
+    const publicImageUrl = `/${process.env.API_PREFIX ?? 'api'}/review-images/${imageFileName}`;
+    await reviewImagesRepository.save(
+      reviewImagesRepository.create({
+        mimeType: 'image/png',
+        originalName: 'review-photo.png',
+        reviewId: publishedReview.id,
+        sizeBytes: 123,
+        sortOrder: 0,
+        storageKey: `reviews/${imageFileName}`,
+        url: publicImageUrl,
+      }),
+    );
+    await reviewImagesRepository.save(
+      reviewImagesRepository.create({
+        mimeType: 'image/png',
+        originalName: 'hidden-review-photo.png',
+        reviewId: hiddenReview.id,
+        sizeBytes: 456,
+        sortOrder: 0,
+        storageKey: 'reviews/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.png',
+        url: `/${process.env.API_PREFIX ?? 'api'}/review-images/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.png`,
+      }),
+    );
+    await reviewImagesRepository.save(
+      reviewImagesRepository.create({
+        mimeType: 'image/png',
+        originalName: 'deleted-review-photo.png',
+        reviewId: deletedReview.id,
+        sizeBytes: 789,
+        sortOrder: 0,
+        storageKey: 'reviews/cccccccc-cccc-4ccc-8ccc-cccccccccccc.png',
+        url: `/${process.env.API_PREFIX ?? 'api'}/review-images/cccccccc-cccc-4ccc-8ccc-cccccccccccc.png`,
+      }),
+    );
+
+    const url = `/${process.env.API_PREFIX ?? 'api'}/admin/reviews`;
+    await request(app.getHttpServer()).get(url).expect(401);
+    await request(app.getHttpServer())
+      .get(url)
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .expect(403);
+
+    const firstPage = await request(app.getHttpServer())
+      .get(url)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .query({ page: 1, limit: 2 })
+      .expect(200);
+    const firstPageBody = firstPage.body as AdminReviewList;
+    expect(firstPageBody.meta).toMatchObject({
+      currentPage: 1,
+      pageSize: 2,
+      totalItems: 4,
+      totalPages: 2,
+    });
+    expect(firstPageBody.reviews.map((review) => review.id)).toEqual(
+      expectedPageOrder.slice(0, 2).map((review) => review.id),
+    );
+
+    const secondPage = await request(app.getHttpServer())
+      .get(url)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .query({ page: 2, limit: 2 })
+      .expect(200);
+    const secondPageBody = secondPage.body as AdminReviewList;
+    expect(secondPageBody.reviews.map((review) => review.id)).toEqual(
+      expectedPageOrder.slice(2).map((review) => review.id),
+    );
+
+    const defaultStatuses = await request(app.getHttpServer())
+      .get(url)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .expect(200);
+    const defaultStatusesBody = defaultStatuses.body as AdminReviewList;
+    expect(defaultStatusesBody.meta.totalItems).toBe(4);
+    expect(defaultStatusesBody.reviews.map((review) => review.status)).toEqual(
+      expect.arrayContaining([
+        ReviewStatus.PUBLISHED,
+        ReviewStatus.HIDDEN,
+        ReviewStatus.DELETED,
+      ]),
+    );
+    const publishedOnly = await request(app.getHttpServer())
+      .get(url)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .query({ status: ReviewStatus.PUBLISHED })
+      .expect(200);
+    const publishedOnlyBody = publishedOnly.body as AdminReviewList;
+    expect(publishedOnlyBody.meta.totalItems).toBe(1);
+    expect(
+      publishedOnlyBody.reviews.every(
+        (review) => review.status === ReviewStatus.PUBLISHED,
+      ),
+    ).toBe(true);
+
+    const hiddenOnly = await request(app.getHttpServer())
+      .get(url)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .query({ status: ReviewStatus.HIDDEN })
+      .expect(200);
+    const hiddenOnlyBody = hiddenOnly.body as AdminReviewList;
+    expect(hiddenOnlyBody.meta.totalItems).toBe(2);
+    expect(
+      hiddenOnlyBody.reviews.every(
+        (review) => review.status === ReviewStatus.HIDDEN,
+      ),
+    ).toBe(true);
+
+    const deletedOnly = await request(app.getHttpServer())
+      .get(url)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .query({ status: ReviewStatus.DELETED })
+      .expect(200);
+    const deletedOnlyBody = deletedOnly.body as AdminReviewList;
+    expect(deletedOnlyBody.reviews).toHaveLength(1);
+    expect(deletedOnlyBody.reviews[0].id).toBe(deletedReview.id);
+    expect(deletedOnlyBody.reviews[0].images).toEqual([]);
+
+    const filtered = await request(app.getHttpServer())
+      .get(url)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .query({
+        status: ReviewStatus.HIDDEN,
+        tourId: tour.id,
+        userId: otherUser.id,
+      })
+      .expect(200);
+    const filteredBody = filtered.body as AdminReviewList;
+    expect(filteredBody.meta.totalItems).toBe(1);
+    expect(filteredBody.reviews[0].id).toBe(hiddenReview.id);
+    expect(filteredBody.reviews[0].images).toHaveLength(1);
+    expect(filteredBody.reviews[0].images[0]).toMatchObject({
+      mimeType: 'image/png',
+      originalName: 'hidden-review-photo.png',
+      sizeBytes: 456,
+      sortOrder: 0,
+    });
+    expect(filteredBody.reviews[0].images[0]).not.toHaveProperty('storageKey');
+
+    const empty = await request(app.getHttpServer())
+      .get(url)
+      .set('Authorization', `Bearer ${tokenFor(admin)}`)
+      .query({ userId: admin.id })
+      .expect(200);
+    const emptyBody = empty.body as AdminReviewList;
+    expect(emptyBody).toMatchObject({
+      meta: { totalItems: 0, totalPages: 0 },
+      reviews: [],
+    });
+
+    const returnedReview = defaultStatusesBody.reviews.find(
+      (review) => review.id === publishedReview.id,
+    );
+    expect(returnedReview).toBeDefined();
+    if (returnedReview === undefined) {
+      return;
+    }
+    expect(returnedReview.userId).toBe(owner.id);
+    expect(returnedReview).not.toHaveProperty('bookingId');
+    expect(returnedReview).not.toHaveProperty('email');
+    expect(returnedReview).not.toHaveProperty('user');
+    expect(Object.keys(returnedReview).sort()).toEqual(
+      [
+        'body',
+        'createdAt',
+        'id',
+        'images',
+        'rating',
+        'status',
+        'tourId',
+        'updatedAt',
+        'userId',
+      ].sort(),
+    );
+    expect(returnedReview.images).toEqual([
+      {
+        id: expect.any(String) as unknown,
+        mimeType: 'image/png',
+        originalName: 'review-photo.png',
+        sizeBytes: 123,
+        sortOrder: 0,
+        url: publicImageUrl,
+      },
+    ]);
+    expect(returnedReview.images[0]).not.toHaveProperty('storageKey');
+    expect(Object.keys(returnedReview.images[0] ?? {}).sort()).toEqual(
+      [
+        'id',
+        'mimeType',
+        'originalName',
+        'sizeBytes',
+        'sortOrder',
+        'url',
+      ].sort(),
+    );
+
+    const invalidQueries = [
+      { status: 'INVALID' },
+      { tourId: 'not-a-uuid' },
+      { userId: 'not-a-uuid' },
+      { page: 0 },
+      { limit: 0 },
+      { limit: MAX_PAGE_SIZE + 1 },
+      { unexpectedFilter: 'value' },
+    ];
+    for (const query of invalidQueries) {
+      await request(app.getHttpServer())
+        .get(url)
+        .set('Authorization', `Bearer ${tokenFor(admin)}`)
+        .query(query)
+        .expect(400);
+    }
   });
 });
