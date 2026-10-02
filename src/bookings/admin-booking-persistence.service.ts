@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import type { Repository, SelectQueryBuilder } from 'typeorm';
-import { AdminBookingTransactionStore } from './admin-booking-transaction.store';
+import { AdminBookingTransactionService } from './admin-booking-transaction.service';
 import {
   ADMIN_BOOKING_DEPARTURE_QUERY_FIELDS,
   ADMIN_BOOKING_QUERY_FIELDS,
@@ -14,7 +14,7 @@ import type { AdminBookingFilters } from './interfaces/admin-booking-filters.int
 import type { AdminBookingTransaction } from './interfaces/admin-booking-transaction.interface';
 
 @Injectable()
-export class AdminBookingsStore {
+export class AdminBookingPersistenceService {
   constructor(
     private readonly dataSource: DataSource,
     @InjectRepository(BookingEntity)
@@ -52,7 +52,7 @@ export class AdminBookingsStore {
     operation: (transaction: AdminBookingTransaction) => Promise<T>,
   ): Promise<T> {
     return this.dataSource.transaction((manager) =>
-      operation(new AdminBookingTransactionStore(manager)),
+      operation(new AdminBookingTransactionService(manager)),
     );
   }
 

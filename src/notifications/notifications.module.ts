@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { BookingsModule } from '../bookings/bookings.module';
 import { BookingEntity } from '../bookings/entities/booking.entity';
 import { BookingNotificationProcessor } from './booking-notification.processor';
+import { BookingNotificationOutboxEntity } from './entities/booking-notification-outbox.entity';
 import {
   BOOKING_NOTIFICATION_QUEUE,
   BOOKING_NOTIFICATION_QUEUE_PREFIX,
@@ -17,14 +18,15 @@ import {
   TEST_NODE_ENVIRONMENT,
 } from './constants/notification.constants';
 import { MailService } from './mail.service';
-import { NotificationBookingsStore } from './notification-bookings.store';
+import { NotificationBookingsService } from './notification-bookings.service';
 import { NotificationsService } from './notifications.service';
 
 @Module({
+  exports: [NotificationsService],
   imports: [
     BookingsModule,
     ConfigModule,
-    TypeOrmModule.forFeature([BookingEntity]),
+    TypeOrmModule.forFeature([BookingEntity, BookingNotificationOutboxEntity]),
     BullModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -47,7 +49,7 @@ import { NotificationsService } from './notifications.service';
   providers: [
     BookingNotificationProcessor,
     MailService,
-    NotificationBookingsStore,
+    NotificationBookingsService,
     NotificationsService,
     { provide: NOTIFICATION_MAIL_SENDER, useExisting: MailService },
   ],

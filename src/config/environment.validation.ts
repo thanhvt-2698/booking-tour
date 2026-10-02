@@ -7,6 +7,11 @@ import { ConfigurationError } from './configuration.error';
 
 const environmentSchema = Joi.object({
   API_PREFIX: Joi.string().trim().default('api'),
+  BOOKING_PENDING_TTL_HOURS: Joi.number()
+    .integer()
+    .min(1)
+    .max(8760)
+    .default(24),
   DB_HOST: Joi.string().hostname().default('localhost'),
   DB_NAME: Joi.string().trim().default('booking_tour'),
   DB_PASSWORD: Joi.string().allow('').default('nestjs'),
@@ -37,6 +42,15 @@ const environmentSchema = Joi.object({
   REDIS_HOST: Joi.string().hostname().default('localhost'),
   REDIS_PASSWORD: Joi.string().allow('').default(''),
   REDIS_PORT: Joi.number().port().default(DEFAULT_REDIS_PORT),
+  SCHEDULER_BATCH_SIZE: Joi.number().integer().min(1).max(1000).default(100),
+  SCHEDULER_ENABLED: Joi.boolean()
+    .truthy('true')
+    .falsy('false')
+    .when('NODE_ENV', {
+      is: 'test',
+      then: Joi.boolean().default(false),
+      otherwise: Joi.boolean().default(true),
+    }),
 }).unknown(true);
 
 export function validateEnvironment(

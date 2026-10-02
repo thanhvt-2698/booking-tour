@@ -3,7 +3,7 @@ import { DepartureStatus } from '../tours/constants/departure.constants';
 import { TourDepartureEntity } from '../tours/entities/tour-departure.entity';
 import { TourEntity } from '../tours/entities/tour.entity';
 import { UserEntity } from '../users/entities/user.entity';
-import { AdminBookingsStore } from './admin-bookings.store';
+import { AdminBookingPersistenceService } from './admin-booking-persistence.service';
 import { AdminBookingsService } from './admin-bookings.service';
 import { BookingEventsService } from './booking-events.service';
 import { BookingStatus } from './constants/booking.constants';
@@ -65,7 +65,7 @@ describe('AdminBookingsService', () => {
         findById: findByIdMock,
         findMany: findManyMock,
         withinTransaction: withinTransactionMock,
-      } as unknown as AdminBookingsStore,
+      } as unknown as AdminBookingPersistenceService,
       {
         publishStatusChanged: publishStatusChangedMock,
       } as unknown as BookingEventsService,
@@ -122,11 +122,12 @@ describe('AdminBookingsService', () => {
     expect(findManyMock).not.toHaveBeenCalled();
   });
 
-  it('rejects a pending booking, releases seats, writes history and publishes after commit', async () => {
+  it('rejects a pending booking and publishes after commit', async () => {
     const transitionBooking = {
       ...fullBooking,
       departure: undefined,
       status: BookingStatus.PENDING,
+      userId,
       user: undefined,
     } as unknown as BookingEntity;
     const departure = {
@@ -141,12 +142,14 @@ describe('AdminBookingsService', () => {
       .fn()
       .mockImplementation((item: TourDepartureEntity) => item);
     const saveStatusHistoryMock = jest.fn();
+    const saveNotificationOutboxMock = jest.fn();
     const transaction = {
       findBookingForUpdate: jest.fn().mockResolvedValue(transitionBooking),
       findDepartureForUpdate: jest.fn().mockResolvedValue(departure),
       saveBooking: saveBookingMock,
       saveDeparture: saveDepartureMock,
       saveStatusHistory: saveStatusHistoryMock,
+      saveNotificationOutbox: saveNotificationOutboxMock,
     } as unknown as jest.Mocked<AdminBookingTransaction>;
     withinTransactionMock.mockImplementation(
       async (
@@ -188,6 +191,19 @@ describe('AdminBookingsService', () => {
       reason: 'Missing required information',
       toStatus: BookingStatus.REJECTED,
     });
+    expect(saveNotificationOutboxMock).toHaveBeenCalledWith(
+      {
+        actorUserId,
+        bookingId,
+        fromStatus: BookingStatus.PENDING,
+        reason: 'Missing required information',
+        toStatus: BookingStatus.REJECTED,
+      },
+      userId,
+    );
+    expect(saveStatusHistoryMock.mock.invocationCallOrder[0]).toBeLessThan(
+      saveNotificationOutboxMock.mock.invocationCallOrder[0],
+    );
     expect(publishStatusChangedMock).toHaveBeenCalledWith({
       actorUserId,
       bookingId,
@@ -195,6 +211,43 @@ describe('AdminBookingsService', () => {
       reason: 'Missing required information',
       toStatus: BookingStatus.REJECTED,
     });
+  });
+
+  it('does not commit or publish when notification outbox persistence fails', async () => {
+    const transitionBooking = {
+      ...fullBooking,
+      departure: undefined,
+      status: BookingStatus.PENDING,
+      userId,
+      user: undefined,
+    } as unknown as BookingEntity;
+    let transactionCompleted = false;
+    const transaction = {
+      findBookingForUpdate: jest.fn().mockResolvedValue(transitionBooking),
+      saveBooking: jest.fn().mockResolvedValue(transitionBooking),
+      saveStatusHistory: jest.fn().mockResolvedValue(undefined),
+      saveNotificationOutbox: jest
+        .fn()
+        .mockRejectedValue(new Error('outbox insert failed')),
+    } as unknown as AdminBookingTransaction;
+    withinTransactionMock.mockImplementation(
+      async (
+        operation: (item: AdminBookingTransaction) => Promise<unknown>,
+      ) => {
+        const result = await operation(transaction);
+        transactionCompleted = true;
+
+        return result;
+      },
+    );
+
+    await expect(
+      adminBookingsService.approve(actorUserId, bookingId, {}),
+    ).rejects.toThrow('outbox insert failed');
+
+    expect(transactionCompleted).toBe(false);
+    expect(findByIdMock).not.toHaveBeenCalled();
+    expect(publishStatusChangedMock).not.toHaveBeenCalled();
   });
 
   it('does not publish an event when a booking cannot transition', async () => {

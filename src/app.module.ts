@@ -14,6 +14,7 @@ import { getDatabaseConfig } from './config/database.config';
 import { validateEnvironment } from './config/environment.validation';
 import { NotificationsModule } from './notifications/notifications.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
 import { ToursModule } from './tours/tours.module';
 import { UsersModule } from './users/users.module';
 
@@ -30,6 +31,7 @@ import { UsersModule } from './users/users.module';
     CategoriesModule,
     NotificationsModule,
     ReviewsModule,
+    SchedulerModule,
     ToursModule,
     UsersModule,
   ],

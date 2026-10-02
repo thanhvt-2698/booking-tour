@@ -1,5 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { getQueueToken } from '@nestjs/bull';
+import type { Queue } from 'bull';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import request from 'supertest';
@@ -19,7 +21,12 @@ import { TourDepartureEntity } from '../src/tours/entities/tour-departure.entity
 import { TourEntity } from '../src/tours/entities/tour.entity';
 import { UserRole, UserStatus } from '../src/users/constants/user.constants';
 import { UserEntity } from '../src/users/entities/user.entity';
-import { NOTIFICATION_MAIL_SENDER } from '../src/notifications/constants/notification.constants';
+import {
+  BOOKING_NOTIFICATION_QUEUE,
+  NOTIFICATION_MAIL_SENDER,
+} from '../src/notifications/constants/notification.constants';
+import { BookingNotificationOutboxEntity } from '../src/notifications/entities/booking-notification-outbox.entity';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import type { MailMessage } from '../src/notifications/interfaces/mail-message.interface';
 
 const MAIL_DELIVERY_POLL_INTERVAL_MS = 20;
@@ -256,6 +263,11 @@ describe('Admin bookings (e2e)', () => {
         );
       });
 
+    const notifications = app.get(NotificationsService);
+    const suppressedWakeup = jest
+      .spyOn(notifications, 'handleStatusChanged')
+      .mockResolvedValue();
+
     await request(app.getHttpServer())
       .patch(`/api/admin/bookings/${rejectedBooking.id}/reject`)
       .set('Authorization', `Bearer ${adminToken}`)
@@ -267,6 +279,33 @@ describe('Admin bookings (e2e)', () => {
         expect(response.cancelReason).toBe('Missing required information');
         expect(response.status).toBe(BookingStatus.REJECTED);
       });
+
+    suppressedWakeup.mockRestore();
+    const outboxRepository = app.get<
+      Repository<BookingNotificationOutboxEntity>
+    >(getRepositoryToken(BookingNotificationOutboxEntity));
+    const pendingNotification = await outboxRepository.findOne({
+      select: ['id', 'bookingId', 'dispatchedAt', 'processedAt'],
+      where: { bookingId: rejectedBooking.id },
+    });
+    expect(pendingNotification).toMatchObject({
+      bookingId: rejectedBooking.id,
+      dispatchedAt: null,
+      processedAt: null,
+    });
+    const queue = app.get<Queue>(getQueueToken(BOOKING_NOTIFICATION_QUEUE));
+    const unavailableRedis = jest
+      .spyOn(queue, 'add')
+      .mockRejectedValue(new Error('Simulated queue outage'));
+    await notifications.dispatchPending();
+    unavailableRedis.mockRestore();
+    expect(
+      await outboxRepository.findOne({
+        select: ['id', 'dispatchedAt', 'processedAt'],
+        where: { id: pendingNotification!.id },
+      }),
+    ).toMatchObject({ dispatchedAt: null, processedAt: null });
+    await notifications.dispatchPending();
 
     const savedDeparture = await departuresRepository.findOne({
       select: ['id', 'bookedSeats'],
@@ -311,6 +350,8 @@ describe('Admin bookings (e2e)', () => {
     expect(approvalMail).toMatchObject({ to: user.email });
     expect(rejectionMail).toMatchObject({ to: user.email });
     expect(rejectionMail?.text).toContain('Missing required information');
+    await notifications.dispatchPending();
+    expect(mailSendMock).toHaveBeenCalledTimes(2);
 
     await request(app.getHttpServer())
       .patch(`/api/admin/bookings/${rejectedBooking.id}/approve`)

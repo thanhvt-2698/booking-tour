@@ -24,6 +24,7 @@ export const ADMIN_BOOKING_ACTION_QUERY_FIELDS = [
   'booking.quantity',
   'booking.status',
   'booking.cancelReason',
+  'booking.userId',
 ];
 
 export const ADMIN_BOOKING_USER_QUERY_FIELDS = ['user.id', 'user.email'];

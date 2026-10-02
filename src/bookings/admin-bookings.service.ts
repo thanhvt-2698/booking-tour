@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { createPaginationMeta } from '../common/dto/pagination-response.dto';
-import { AdminBookingsStore } from './admin-bookings.store';
+import { AdminBookingPersistenceService } from './admin-booking-persistence.service';
 import { BookingEventsService } from './booking-events.service';
 import {
   ADMIN_BOOKING_NEXT_CALENDAR_DAY_OFFSET,
@@ -23,7 +23,7 @@ import type { AdminBookingTransaction } from './interfaces/admin-booking-transac
 @Injectable()
 export class AdminBookingsService {
   constructor(
-    private readonly adminBookingsStore: AdminBookingsStore,
+    private readonly adminBookingPersistenceService: AdminBookingPersistenceService,
     private readonly bookingEventsService: BookingEventsService,
   ) {}
 
@@ -41,7 +41,8 @@ export class AdminBookingsService {
   }
 
   async findById(bookingId: string): Promise<AdminBookingResponseDto> {
-    const booking = await this.adminBookingsStore.findById(bookingId);
+    const booking =
+      await this.adminBookingPersistenceService.findById(bookingId);
 
     if (!booking) {
       throw new NotFoundException('errors.bookingNotFound');
@@ -52,11 +53,12 @@ export class AdminBookingsService {
 
   async findMany(query: AdminBookingQueryDto): Promise<AdminBookingList> {
     const filters = this.createFilters(query);
-    const [bookings, totalItems] = await this.adminBookingsStore.findMany(
-      filters,
-      query.offset,
-      query.limit,
-    );
+    const [bookings, totalItems] =
+      await this.adminBookingPersistenceService.findMany(
+        filters,
+        query.offset,
+        query.limit,
+      );
 
     return {
       bookings: bookings.map((booking) => this.toResponse(booking)),
@@ -161,7 +163,7 @@ export class AdminBookingsService {
     input: AdminBookingActionDto,
     nextStatus: BookingStatus.APPROVED | BookingStatus.REJECTED,
   ): Promise<AdminBookingResponseDto> {
-    const event = await this.adminBookingsStore.withinTransaction(
+    const event = await this.adminBookingPersistenceService.withinTransaction(
       async (transaction) => {
         const booking = await transaction.findBookingForUpdate(bookingId);
 
@@ -181,21 +183,17 @@ export class AdminBookingsService {
 
         booking.status = nextStatus;
         await transaction.saveBooking(booking);
-        await transaction.saveStatusHistory({
-          actorUserId,
-          bookingId: booking.id,
-          fromStatus: BookingStatus.PENDING,
-          reason,
-          toStatus: nextStatus,
-        });
-
-        return {
+        const event = {
           actorUserId,
           bookingId: booking.id,
           fromStatus: BookingStatus.PENDING,
           reason,
           toStatus: nextStatus,
         };
+        await transaction.saveStatusHistory(event);
+        await transaction.saveNotificationOutbox(event, booking.userId);
+
+        return event;
       },
     );
 

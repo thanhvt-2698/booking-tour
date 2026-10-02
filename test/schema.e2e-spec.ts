@@ -44,15 +44,36 @@ describe('Migrated schema integration', () => {
   });
 
   it('has the expected domain tables and foreign keys without duplicate columns', async () => {
-    expect(source.entityMetadatas).toHaveLength(11);
+    expect(source.entityMetadatas).toHaveLength(12);
     expect(source.entityMetadatas.flatMap((m) => m.foreignKeys)).toHaveLength(
-      14,
+      15,
     );
     const tables = await runner.getTables(
       source.entityMetadatas.map((m) => m.tableName),
     );
-    expect(tables).toHaveLength(11);
-    expect(tables.flatMap((t) => t.foreignKeys)).toHaveLength(14);
+    expect(tables).toHaveLength(12);
+    expect(tables.flatMap((t) => t.foreignKeys)).toHaveLength(15);
+    const outbox = tables.find(
+      (table) => table.name === 'booking_notification_outbox',
+    );
+    expect(outbox?.foreignKeys).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'FK_booking_notification_outbox_booking',
+          onDelete: 'CASCADE',
+          columnNames: ['booking_id'],
+        }),
+      ]),
+    );
+    expect(outbox?.indices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'UQ_booking_notification_outbox_deduplication_key',
+          isUnique: true,
+          columnNames: ['deduplication_key'],
+        }),
+      ]),
+    );
     for (const metadata of source.entityMetadatas) {
       const table = tables.find((t) => t.name === metadata.tableName)!;
       expect(table.columns.map((c) => c.name).sort()).toEqual(

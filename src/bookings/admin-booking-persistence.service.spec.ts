@@ -16,9 +16,9 @@ import {
 import { BookingStatus } from './constants/booking.constants';
 import { BookingEntity } from './entities/booking.entity';
 import type { AdminBookingTransaction } from './interfaces/admin-booking-transaction.interface';
-import { AdminBookingsStore } from './admin-bookings.store';
+import { AdminBookingPersistenceService } from './admin-booking-persistence.service';
 
-describe('AdminBookingsStore', () => {
+describe('AdminBookingPersistenceService', () => {
   const bookingId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
   const departureId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
   const tourId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
@@ -41,9 +41,12 @@ describe('AdminBookingsStore', () => {
     const bookingsRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(query),
     } as unknown as Repository<BookingEntity>;
-    const store = new AdminBookingsStore({} as DataSource, bookingsRepository);
+    const service = new AdminBookingPersistenceService(
+      {} as DataSource,
+      bookingsRepository,
+    );
 
-    await store.findMany(
+    await service.findMany(
       {
         createdFrom: new Date('2030-07-01T00:00:00.000Z'),
         createdTo: new Date('2030-08-01T00:00:00.000Z'),
@@ -104,7 +107,7 @@ describe('AdminBookingsStore', () => {
           createQueryBuilder: jest.fn().mockReturnValue(departureQuery),
         }),
     } as unknown as EntityManager;
-    const store = new AdminBookingsStore(
+    const service = new AdminBookingPersistenceService(
       {
         transaction: (
           operation: (item: EntityManager) => Promise<unknown>,
@@ -113,7 +116,7 @@ describe('AdminBookingsStore', () => {
       {} as Repository<BookingEntity>,
     );
 
-    await store.withinTransaction(
+    await service.withinTransaction(
       async (transaction: AdminBookingTransaction) => {
         await transaction.findBookingForUpdate(bookingId);
         await transaction.findDepartureForUpdate(departureId);

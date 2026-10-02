@@ -1,6 +1,7 @@
 import type { TourDepartureEntity } from '../../tours/entities/tour-departure.entity';
 import type { BookingStatusHistoryEntity } from '../entities/booking-status-history.entity';
 import type { BookingEntity } from '../entities/booking.entity';
+import type { BookingStatusChangedEvent } from './booking-status-changed.interface';
 import type { CreateBookingStatusHistory } from './create-booking-status-history.interface';
 
 export interface AdminBookingTransaction {
@@ -13,4 +14,8 @@ export interface AdminBookingTransaction {
   saveStatusHistory(
     input: CreateBookingStatusHistory,
   ): Promise<BookingStatusHistoryEntity>;
+  saveNotificationOutbox(
+    event: BookingStatusChangedEvent,
+    recipientUserId: string,
+  ): Promise<void>;
 }
