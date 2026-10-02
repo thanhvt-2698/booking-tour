@@ -26,12 +26,15 @@ import {
   REVIEW_IMAGE_MANAGEMENT_QUERY_FIELDS,
   REVIEW_IMAGE_PUBLIC_QUERY_FIELDS,
   REVIEW_INSERT_RETURNING_FIELDS,
+  REVIEW_ADMIN_QUERY_FIELDS,
   REVIEW_MANAGEMENT_QUERY_FIELDS,
   REVIEW_PUBLIC_QUERY_FIELDS,
   REVIEW_TOUR_QUERY_FIELDS,
   REVIEW_IMAGE_SORT_ORDER_INCREMENT,
   ReviewStatus,
 } from './constants/review.constants';
+import type { AdminReviewQueryDto } from './dto/admin-review-query.dto';
+import type { AdminReviewResponseDto } from './dto/admin-review-response.dto';
 import type { CreateReviewDto } from './dto/create-review.dto';
 import type { ModerateReviewDto } from './dto/moderate-review.dto';
 import type { ReviewQueryDto } from './dto/review-query.dto';
@@ -39,6 +42,7 @@ import type { ReviewResponseDto } from './dto/review-response.dto';
 import type { UpdateReviewDto } from './dto/update-review.dto';
 import { ReviewImageEntity } from './entities/review-image.entity';
 import { ReviewEntity } from './entities/review.entity';
+import type { AdminReviewList } from './interfaces/admin-review-list.interface';
 import type { CreateReviewRecord } from './interfaces/create-review-record.interface';
 import type { ReviewList } from './interfaces/review-list.interface';
 
@@ -166,6 +170,45 @@ export class ReviewsService {
       meta: createPaginationMeta(query.page, query.limit, totalItems),
       reviews: reviews.map((review) =>
         this.toResponse(review, imagesByReviewId.get(review.id) ?? []),
+      ),
+    };
+  }
+
+  async findForAdmin(query: AdminReviewQueryDto): Promise<AdminReviewList> {
+    const reviewsQuery = this.reviewsRepository
+      .createQueryBuilder('review')
+      .select([...REVIEW_ADMIN_QUERY_FIELDS])
+      .orderBy('review.createdAt', 'DESC')
+      .addOrderBy('review.id', 'DESC')
+      .skip(query.offset)
+      .take(query.limit);
+
+    if (query.status) {
+      reviewsQuery.andWhere('review.status = :status', {
+        status: query.status,
+      });
+    }
+    if (query.tourId) {
+      reviewsQuery.andWhere('review.tourId = :tourId', {
+        tourId: query.tourId,
+      });
+    }
+    if (query.userId) {
+      reviewsQuery.andWhere('review.userId = :userId', {
+        userId: query.userId,
+      });
+    }
+
+    const [reviews, totalItems] = await reviewsQuery.getManyAndCount();
+    const visibleReviewIds = reviews
+      .filter((review) => review.status !== ReviewStatus.DELETED)
+      .map((review) => review.id);
+    const imagesByReviewId = await this.findImagesByReviewIds(visibleReviewIds);
+
+    return {
+      meta: createPaginationMeta(query.page, query.limit, totalItems),
+      reviews: reviews.map((review) =>
+        this.toAdminResponse(review, imagesByReviewId.get(review.id) ?? []),
       ),
     };
   }
@@ -529,6 +572,16 @@ export class ReviewsService {
       status: review.status,
       tourId: review.tourId,
       updatedAt: review.updatedAt,
+    };
+  }
+
+  private toAdminResponse(
+    review: ReviewEntity,
+    images: readonly ReviewImageEntity[],
+  ): AdminReviewResponseDto {
+    return {
+      ...this.toResponse(review, images),
+      userId: review.userId,
     };
   }
 }

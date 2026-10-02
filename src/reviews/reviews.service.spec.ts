@@ -1,13 +1,15 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { Not } from 'typeorm';
+import { In, Not } from 'typeorm';
 import type { DataSource, Repository } from 'typeorm';
 import { TourStatus } from '../tours/constants/tour.constants';
 import { TourEntity } from '../tours/entities/tour.entity';
 import {
+  REVIEW_ADMIN_QUERY_FIELDS,
   REVIEW_MANAGEMENT_QUERY_FIELDS,
   REVIEW_PUBLIC_QUERY_FIELDS,
   ReviewStatus,
 } from './constants/review.constants';
+import { AdminReviewQueryDto } from './dto/admin-review-query.dto';
 import { ReviewQueryDto } from './dto/review-query.dto';
 import { ReviewEntity } from './entities/review.entity';
 import { ReviewsService } from './reviews.service';
@@ -26,6 +28,7 @@ describe('ReviewsService', () => {
   let service: ReviewsService;
   let existsByMock: jest.Mock;
   let findOneMock: jest.Mock;
+  let findImagesMock: jest.Mock;
   let getManyAndCountMock: jest.Mock;
   let selectMock: jest.Mock;
   let andWhereMock: jest.Mock;
@@ -33,6 +36,7 @@ describe('ReviewsService', () => {
   let addOrderByMock: jest.Mock;
   let skipMock: jest.Mock;
   let takeMock: jest.Mock;
+  let whereMock: jest.Mock;
   let updateMock: jest.Mock;
   let storedReview: ReviewEntity;
 
@@ -44,6 +48,7 @@ describe('ReviewsService', () => {
     status: ReviewStatus.PUBLISHED,
     tourId: 'tour-id',
     updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    userId: 'user-id',
   } as ReviewEntity;
 
   beforeEach(() => {
@@ -61,6 +66,7 @@ describe('ReviewsService', () => {
     addOrderByMock = jest.fn().mockReturnThis();
     skipMock = jest.fn().mockReturnThis();
     takeMock = jest.fn().mockReturnThis();
+    whereMock = jest.fn().mockReturnThis();
     const queryBuilder = {
       addOrderBy: addOrderByMock,
       andWhere: andWhereMock,
@@ -69,7 +75,7 @@ describe('ReviewsService', () => {
       select: selectMock,
       skip: skipMock,
       take: takeMock,
-      where: jest.fn().mockReturnThis(),
+      where: whereMock,
     };
     const reviewsRepository = {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
@@ -79,8 +85,9 @@ describe('ReviewsService', () => {
     const toursRepository = {
       existsBy: existsByMock,
     } as unknown as Repository<TourEntity>;
+    findImagesMock = jest.fn().mockResolvedValue([]);
     const reviewImagesRepository = {
-      find: jest.fn().mockResolvedValue([]),
+      find: findImagesMock,
     } as unknown as Repository<ReviewImageEntity>;
     const dataSource = {
       transaction: jest.fn(
@@ -136,6 +143,135 @@ describe('ReviewsService', () => {
     expect(addOrderByMock).toHaveBeenCalledWith('review.id', 'DESC');
     expect(skipMock).toHaveBeenCalledWith(1);
     expect(takeMock).toHaveBeenCalledWith(1);
+  });
+
+  it('lists admin reviews with bounded fields, filters, pagination, and images', async () => {
+    const adminUserId = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+    const adminTourId = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+    const hiddenReview = {
+      ...review,
+      status: ReviewStatus.HIDDEN,
+      tourId: adminTourId,
+      userId: adminUserId,
+    };
+    const image = {
+      id: 'image-id',
+      mimeType: 'image/jpeg',
+      originalName: 'photo.jpg',
+      reviewId: review.id,
+      sizeBytes: 123,
+      sortOrder: 0,
+      storageKey: 'reviews/private-key.jpg',
+      url: '/api/review-images/photo.jpg',
+    } as ReviewImageEntity;
+    getManyAndCountMock.mockResolvedValue([[hiddenReview], 1]);
+    findImagesMock.mockResolvedValue([image]);
+    const query = new AdminReviewQueryDto();
+    query.page = 2;
+    query.limit = 1;
+    query.status = ReviewStatus.HIDDEN;
+    query.tourId = adminTourId;
+    query.userId = adminUserId;
+
+    await expect(service.findForAdmin(query)).resolves.toEqual({
+      meta: { currentPage: 2, pageSize: 1, totalItems: 1, totalPages: 1 },
+      reviews: [
+        {
+          body: hiddenReview.body,
+          createdAt: hiddenReview.createdAt,
+          id: hiddenReview.id,
+          images: [
+            {
+              id: image.id,
+              mimeType: image.mimeType,
+              originalName: image.originalName,
+              sizeBytes: image.sizeBytes,
+              sortOrder: image.sortOrder,
+              url: image.url,
+            },
+          ],
+          rating: hiddenReview.rating,
+          status: ReviewStatus.HIDDEN,
+          tourId: adminTourId,
+          updatedAt: hiddenReview.updatedAt,
+          userId: adminUserId,
+        },
+      ],
+    });
+
+    expect(selectMock).toHaveBeenCalledWith([...REVIEW_ADMIN_QUERY_FIELDS]);
+    expect(andWhereMock).toHaveBeenCalledWith('review.status = :status', {
+      status: ReviewStatus.HIDDEN,
+    });
+    expect(andWhereMock).toHaveBeenCalledWith('review.tourId = :tourId', {
+      tourId: adminTourId,
+    });
+    expect(andWhereMock).toHaveBeenCalledWith('review.userId = :userId', {
+      userId: adminUserId,
+    });
+    expect(orderByMock).toHaveBeenCalledWith('review.createdAt', 'DESC');
+    expect(addOrderByMock).toHaveBeenCalledWith('review.id', 'DESC');
+    expect(skipMock).toHaveBeenCalledWith(1);
+    expect(takeMock).toHaveBeenCalledWith(1);
+    expect(findImagesMock).toHaveBeenCalledWith({
+      order: { reviewId: 'ASC', sortOrder: 'ASC', id: 'ASC' },
+      select: [...REVIEW_IMAGE_PUBLIC_QUERY_FIELDS],
+      where: { reviewId: In([review.id]) },
+    });
+  });
+
+  it('includes all review statuses when no status filter is supplied', async () => {
+    const statuses = [
+      ReviewStatus.PUBLISHED,
+      ReviewStatus.HIDDEN,
+      ReviewStatus.DELETED,
+    ];
+    getManyAndCountMock.mockResolvedValue([
+      statuses.map((status) => ({ ...review, id: `review-${status}`, status })),
+      statuses.length,
+    ]);
+
+    const result = await service.findForAdmin(new AdminReviewQueryDto());
+
+    expect(result.reviews.map((item) => item.status)).toEqual(statuses);
+    expect(
+      result.reviews.find((item) => item.status === ReviewStatus.DELETED)
+        ?.images,
+    ).toEqual([]);
+    expect(andWhereMock).not.toHaveBeenCalled();
+  });
+
+  it('supports filtering deleted reviews and omits their images', async () => {
+    const deletedReview = {
+      ...review,
+      status: ReviewStatus.DELETED,
+      userId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    };
+    getManyAndCountMock.mockResolvedValue([[deletedReview], 1]);
+    const query = new AdminReviewQueryDto();
+    query.status = ReviewStatus.DELETED;
+
+    await expect(service.findForAdmin(query)).resolves.toMatchObject({
+      reviews: [{ images: [], status: ReviewStatus.DELETED }],
+    });
+
+    expect(andWhereMock).toHaveBeenCalledWith('review.status = :status', {
+      status: ReviewStatus.DELETED,
+    });
+    expect(findImagesMock).not.toHaveBeenCalled();
+  });
+
+  it('does not query image metadata for an empty admin page', async () => {
+    getManyAndCountMock.mockResolvedValue([[], 0]);
+
+    await expect(
+      service.findForAdmin(new AdminReviewQueryDto()),
+    ).resolves.toMatchObject({
+      meta: { totalItems: 0, totalPages: 0 },
+      reviews: [],
+    });
+
+    expect(findImagesMock).not.toHaveBeenCalled();
   });
 
   it('does not expose reviews of a draft or absent tour', async () => {
